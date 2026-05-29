@@ -71,6 +71,7 @@ if (process.env.NODE_ENV === 'production') {
 const { dbQuery, initDatabase } = require('./config/database');
 const { processPDFPipeline, enrichPendingQuestions, logToExecutionFile } = require('./services/processingEngine');
 const { generateExcelWorkbook, generateTrendsExcelWorkbook } = require('./services/excelGenerator');
+const { deleteImage } = require('./services/imageStorage');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -657,17 +658,23 @@ app.delete('/api/upload/:id', async (req, res) => {
       return res.status(404).json({ error: 'Upload package not found.' });
     }
     
-    // 1. Fetch questions associated with this upload to clean their physical diagrams
+    // 1. Fetch questions associated with this upload to clean their diagrams (both local and Cloudinary)
     const questions = await dbQuery.all('SELECT * FROM QuestionBank WHERE Upload_ID = ?', [id]);
     for (const q of questions) {
+      if (q.Embedded_Image) {
+        await deleteImage(q.Embedded_Image);
+      }
+      // Clean up option images if present
+      const options = [q.Option_A, q.Option_B, q.Option_C, q.Option_D];
+      for (const opt of options) {
+        if (opt && (opt.startsWith('/uploads/') || opt.startsWith('http'))) {
+          await deleteImage(opt);
+        }
+      }
+      
       const images = await dbQuery.all('SELECT * FROM Images WHERE Question_ID = ?', [q.Question_ID]);
       for (const img of images) {
-        const filename = path.basename(img.Image_Path);
-        const physicalPath = path.resolve(__dirname, 'public/uploads/images', filename);
-        if (fs.existsSync(physicalPath)) {
-          fs.unlinkSync(physicalPath);
-          logToExecutionFile('INFO', `Unlinked physical diagram: ${filename} for question ${q.Question_ID}`);
-        }
+        await deleteImage(img.Image_Path);
       }
     }
     

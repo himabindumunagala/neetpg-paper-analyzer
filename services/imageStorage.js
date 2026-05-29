@@ -57,7 +57,47 @@ async function uploadImage(fileName, fileBuffer) {
   }
 }
 
+/**
+ * Deletes clinical diagrams or option images from local disk or Cloudinary.
+ * @param {string} imagePath - Web path or cloud URL of the image
+ */
+async function deleteImage(imagePath) {
+  if (!imagePath) return;
+
+  if (imagePath.startsWith('http')) {
+    // Cloudinary URL: e.g. https://res.cloudinary.com/cloud_name/image/upload/v1780051074/neetpg_analyzer/public_id.png
+    try {
+      const match = imagePath.match(/\/image\/upload\/v\d+\/(.+)\.[a-z]+$/i);
+      if (match && match[1]) {
+        const publicId = match[1];
+        console.log(`Cloudinary destroy: Deleting cloud asset ${publicId}`);
+        await new Promise((resolve) => {
+          cloudinary.uploader.destroy(publicId, (error, result) => {
+            if (error) console.error('Cloudinary destroy failure:', error.message);
+            resolve();
+          });
+        });
+      }
+    } catch (err) {
+      console.error('Failed to delete image from Cloudinary:', err.message);
+    }
+  } else if (imagePath.startsWith('/uploads/')) {
+    // Local filesystem path
+    try {
+      const filename = path.basename(imagePath);
+      const physicalPath = path.resolve(__dirname, '../public/uploads/images', filename);
+      if (fs.existsSync(physicalPath)) {
+        fs.unlinkSync(physicalPath);
+        console.log(`Local unlink: Deleted local asset ${filename}`);
+      }
+    } catch (err) {
+      console.error('Failed to delete local image file:', err.message);
+    }
+  }
+}
+
 module.exports = {
   uploadImage,
+  deleteImage,
   isCloudinaryConfigured
 };
