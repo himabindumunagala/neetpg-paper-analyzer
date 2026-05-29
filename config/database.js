@@ -314,17 +314,18 @@ if (isMongoMode) {
       return QuestionBank.findOne({ Question_ID: params[0] }).lean();
     }
 
-    if (cleanSql.startsWith('SELECT COUNT(*) as count FROM QuestionBank WHERE')) {
-      const { filter } = parseQuestionBankFilterSql(cleanSql, params);
-      const count = await QuestionBank.countDocuments(filter);
+    if (cleanSql === 'SELECT COUNT(*) as count FROM QuestionBank WHERE Image_Present = 1') {
+      const count = await QuestionBank.countDocuments({ Image_Present: true });
       return { count };
     }
 
-    if (cleanSql.startsWith('SELECT COUNT(*) as count FROM QuestionBank')) {
-      let filter = {};
-      if (cleanSql.includes('WHERE Image_Present = 1')) {
-        filter = { Image_Present: true };
-      }
+    if (cleanSql === 'SELECT COUNT(*) as count FROM QuestionBank') {
+      const count = await QuestionBank.countDocuments({});
+      return { count };
+    }
+
+    if (cleanSql.startsWith('SELECT COUNT(*) as count FROM QuestionBank WHERE')) {
+      const { filter } = parseQuestionBankFilterSql(cleanSql, params);
       const count = await QuestionBank.countDocuments(filter);
       return { count };
     }
