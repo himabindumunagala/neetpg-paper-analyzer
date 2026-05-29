@@ -4,3 +4,5 @@ logs/
 *.db-shm
 *.db-wal
 *.db-journal
+.env
+
