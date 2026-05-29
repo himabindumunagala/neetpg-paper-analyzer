@@ -559,7 +559,7 @@ if (!isMongoMode) {
 
 async function initDatabase() {
   if (isMongoMode) {
-    await mongoose.connect(mongoUri, { autoIndex: true });
+    await mongoose.connect(mongoUri, { autoIndex: true, serverSelectionTimeoutMS: 5000 });
     
     await models.SystemSettings.updateOne(
       { Setting_Key: 'admin_password' },
