@@ -189,6 +189,14 @@ if (isMongoMode) {
       return { changes: res.modifiedCount };
     }
 
+    if (cleanSql.startsWith('UPDATE UploadHistory SET Processing_Status = ? WHERE Upload_ID = ?')) {
+      const res = await UploadHistory.updateOne(
+        { Upload_ID: params[1] },
+        { $set: { Processing_Status: params[0] } }
+      );
+      return { changes: res.modifiedCount };
+    }
+
     if (cleanSql.startsWith('DELETE FROM Images WHERE Question_ID IN (SELECT Question_ID FROM QuestionBank WHERE Upload_ID = ?)')) {
       const qIds = await QuestionBank.find({ Upload_ID: params[0] }).distinct('Question_ID');
       const res = await Images.deleteMany({ Question_ID: { $in: qIds } });
@@ -335,8 +343,10 @@ if (isMongoMode) {
       return row ? { Setting_Value: row.Setting_Value } : null;
     }
 
-    if (cleanSql.startsWith("SELECT Setting_Value FROM SystemSettings WHERE Setting_Key = 'admin_password'")) {
-      const row = await SystemSettings.findOne({ Setting_Key: 'admin_password' }).lean();
+    if (cleanSql.startsWith("SELECT Setting_Value FROM SystemSettings WHERE Setting_Key = '")) {
+      const match = cleanSql.match(/Setting_Key\s*=\s*'([^']+)'/);
+      const key = match ? match[1] : 'admin_password';
+      const row = await SystemSettings.findOne({ Setting_Key: key }).lean();
       return row ? { Setting_Value: row.Setting_Value } : null;
     }
 
