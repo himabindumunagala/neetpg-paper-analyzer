@@ -785,6 +785,16 @@ app.post('/api/auth/google', async (req, res) => {
     const name = payload.name;
     const picture = payload.picture;
 
+    // Check if email authorization whitelist is configured
+    const allowedEmailsEnv = process.env.ALLOWED_EMAILS;
+    if (allowedEmailsEnv) {
+      const allowedEmails = allowedEmailsEnv.split(',').map(e => e.trim().toLowerCase());
+      if (!allowedEmails.includes(email.toLowerCase())) {
+        logToExecutionFile('WARN', `Blocked unauthorized login attempt from email: ${email}`);
+        return res.status(403).json({ error: 'Access denied: Your email is not authorized to access this dashboard.' });
+      }
+    }
+
     const { models } = require('./config/database');
     if (!models.User) {
       return res.status(500).json({ error: 'User database model is not initialized.' });
