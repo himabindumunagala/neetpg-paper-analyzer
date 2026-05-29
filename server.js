@@ -747,6 +747,94 @@ app.post('/api/settings/gemini_api_key', async (req, res) => {
 });
 
 /**
+ * GET /api/auth/google/client-id
+ * Returns the configured Google Client ID from environment variables
+ */
+app.get('/api/auth/google/client-id', (req, res) => {
+  res.status(200).json({ clientId: process.env.GOOGLE_CLIENT_ID || '' });
+});
+
+/**
+ * 13. POST /api/auth/google
+ * Verifies the Google OAuth ID Token and logs in/registers the user
+ */
+app.post('/api/auth/google', async (req, res) => {
+  const { idToken } = req.body;
+  if (!idToken) {
+    return res.status(400).json({ error: 'OAuth ID Token is required.' });
+  }
+
+  try {
+    const verifyUrl = `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`;
+    const verifyRes = await fetch(verifyUrl);
+    if (!verifyRes.ok) {
+      const errData = await verifyRes.json().catch(() => ({}));
+      return res.status(401).json({ error: errData.error_description || 'Invalid Google OAuth Token.' });
+    }
+
+    const payload = await verifyRes.json();
+    
+    // Validate Client ID matches if configured
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    if (clientId && payload.aud !== clientId) {
+      return res.status(401).json({ error: 'Client ID mismatch. Token is untrusted.' });
+    }
+
+    const googleId = payload.sub;
+    const email = payload.email;
+    const name = payload.name;
+    const picture = payload.picture;
+
+    const { models } = require('./config/database');
+    if (!models.User) {
+      return res.status(500).json({ error: 'User database model is not initialized.' });
+    }
+
+    // Upsert user in database
+    let user = await models.User.findOne({ Google_ID: googleId });
+    if (!user) {
+      // Check if a user with same email exists
+      user = await models.User.findOne({ Email: email });
+      if (user) {
+        user.Google_ID = googleId;
+        user.Picture = picture || user.Picture;
+        user.Last_Login = new Date();
+        await user.save();
+      } else {
+        // Create new user (Sign Up)
+        user = await models.User.create({
+          Google_ID: googleId,
+          Email: email,
+          Name: name,
+          Picture: picture,
+          Last_Login: new Date()
+        });
+        logToExecutionFile('INFO', `New user registered via Google Sign-In: ${email} (${name})`);
+      }
+    } else {
+      user.Name = name;
+      user.Picture = picture;
+      user.Last_Login = new Date();
+      await user.save();
+    }
+
+    res.status(200).json({
+      success: true,
+      user: {
+        email: user.Email,
+        name: user.Name,
+        picture: user.Picture,
+        googleId: user.Google_ID
+      }
+    });
+
+  } catch (error) {
+    logToExecutionFile('ERROR', `Google authentication failure: ${error.message}`);
+    res.status(500).json({ error: `Google authentication failed: ${error.message}` });
+  }
+});
+
+/**
  * 13. POST /api/auth/login
  * Validates the admin passcode against SystemSettings
  */

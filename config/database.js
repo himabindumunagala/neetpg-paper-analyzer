@@ -110,12 +110,25 @@ if (isMongoMode) {
     { versionKey: false }
   );
 
+  const userSchema = new mongoose.Schema(
+    {
+      Google_ID: { type: String, required: true, unique: true, index: true },
+      Email: { type: String, required: true, unique: true, index: true },
+      Name: { type: String, required: true },
+      Picture: { type: String, default: null },
+      Created_Date: { type: Date, default: Date.now },
+      Last_Login: { type: Date, default: Date.now }
+    },
+    { versionKey: false }
+  );
+
   const UploadHistory = mongoose.model('UploadHistory', uploadHistorySchema, 'UploadHistory');
   const QuestionBank = mongoose.model('QuestionBank', questionBankSchema, 'QuestionBank');
   const Images = mongoose.model('Images', imagesSchema, 'Images');
   const SystemSettings = mongoose.model('SystemSettings', systemSettingsSchema, 'SystemSettings');
+  const User = mongoose.model('User', userSchema, 'User');
 
-  models = { UploadHistory, QuestionBank, Images, SystemSettings };
+  models = { UploadHistory, QuestionBank, Images, SystemSettings, User };
 
   // Helper parser for mapping SQL parameter indexes to Mongoose query filters
   function parseQuestionBankFilterSql(sql, params) {

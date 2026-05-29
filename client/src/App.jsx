@@ -47,27 +47,99 @@ function App() {
   const [isSavingKey, setIsSavingKey] = useState(false);
   const [keyLoadError, setKeyLoadError] = useState('');
   
-  // Authentication & Passcode States (Bypassed)
-  const [isAuthenticated, setIsAuthenticated] = useState(true);
-  const [authChecking, setAuthChecking] = useState(false);
-  const [passcodeInput, setPasscodeInput] = useState('');
+  // Authentication & Google User States
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authChecking, setAuthChecking] = useState(true);
+  const [userProfile, setUserProfile] = useState(null);
   const [authError, setAuthError] = useState('');
-  const [currentPasscode, setCurrentPasscode] = useState('');
-  const [newPasscode, setNewPasscode] = useState('');
-  const [passcodeSuccessMsg, setPasscodeSuccessMsg] = useState('');
-  const [passcodeErrorMsg, setPasscodeErrorMsg] = useState('');
   
   const fileInputRef = useRef(null);
   const logsEndRef = useRef(null);
 
   // 1. Authenticate check on mount
   useEffect(() => {
-    const savedToken = localStorage.getItem('session_token_neetpg');
-    if (savedToken === 'session_token_neetpg') {
-      setIsAuthenticated(true);
+    const savedUser = localStorage.getItem('neetpg_user_profile');
+    if (savedUser) {
+      try {
+        const profile = JSON.parse(savedUser);
+        setUserProfile(profile);
+        setIsAuthenticated(true);
+      } catch (e) {
+        localStorage.removeItem('neetpg_user_profile');
+      }
     }
     setAuthChecking(false);
   }, []);
+
+  // Handle Google Login Credential Callback
+  const handleGoogleLoginCallback = async (response) => {
+    try {
+      const res = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken: response.credential })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        localStorage.setItem('neetpg_user_profile', JSON.stringify(data.user));
+        setUserProfile(data.user);
+        setIsAuthenticated(true);
+        setAuthError('');
+      } else {
+        setAuthError(data.error || 'Google Authentication failed.');
+      }
+    } catch (err) {
+      setAuthError('Failed to connect to authentication server.');
+    }
+  };
+
+  // Handle Logout
+  const handleLogout = () => {
+    localStorage.removeItem('neetpg_user_profile');
+    setUserProfile(null);
+    setIsAuthenticated(false);
+  };
+
+  // Initialize Google Sign-In SDK
+  useEffect(() => {
+    if (isAuthenticated || authChecking) return;
+
+    let checkGoogleInterval;
+    const initGoogleSignIn = () => {
+      if (window.google && window.google.accounts) {
+        clearInterval(checkGoogleInterval);
+        
+        fetch('/api/auth/google/client-id')
+          .then(res => res.json())
+          .then(data => {
+            if (!data.clientId) {
+              setAuthError('Google Client ID is missing. Please configure GOOGLE_CLIENT_ID environment variable.');
+              return;
+            }
+            
+            window.google.accounts.id.initialize({
+              client_id: data.clientId,
+              callback: handleGoogleLoginCallback
+            });
+
+            const parentDiv = document.getElementById('google-login-btn-parent');
+            if (parentDiv) {
+              window.google.accounts.id.renderButton(
+                parentDiv,
+                { theme: 'outline', size: 'large', width: '320' }
+               );
+            }
+          })
+          .catch(err => {
+            console.error('Failed to load Google Client ID:', err);
+            setAuthError('Network error: Could not fetch Google client configurations.');
+          });
+      }
+    };
+
+    checkGoogleInterval = setInterval(initGoogleSignIn, 300);
+    return () => clearInterval(checkGoogleInterval);
+  }, [isAuthenticated, authChecking]);
 
   // Initialize static dashboard stats on mount
   useEffect(() => {
@@ -145,32 +217,7 @@ function App() {
     }
   }, [logs]);
 
-  const handleLoginSubmit = async (e) => {
-    e.preventDefault();
-    setAuthError('');
-    try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: passcodeInput })
-      });
-      const data = await response.json();
-      if (response.ok && data.success) {
-        localStorage.setItem('session_token_neetpg', 'session_token_neetpg');
-        setIsAuthenticated(true);
-      } else {
-        setAuthError(data.error || 'Authentication Failed: Incorrect passcode!');
-      }
-    } catch (err) {
-      setAuthError('Network error: Could not reach the authentication service.');
-    }
-  };
 
-  const handleLogout = () => {
-    localStorage.removeItem('session_token_neetpg');
-    setIsAuthenticated(false);
-    setPasscodeInput('');
-  };
 
   const handleSavePasscode = async (e) => {
     e.preventDefault();
@@ -625,40 +672,25 @@ function App() {
   if (!isAuthenticated) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: 'radial-gradient(circle at top right, #1d1b26, #0c0a0f)', color: '#fff', padding: '1rem' }}>
-        <div className="glass-card" style={{ maxWidth: '400px', width: '100%', padding: '2.5rem', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '1.5rem', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.37)', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.05)', backdropFilter: 'blur(12px)' }}>
+        <div className="glass-card" style={{ maxWidth: '400px', width: '100%', padding: '3rem 2.5rem', borderRadius: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2rem', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.37)', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.05)', backdropFilter: 'blur(12px)' }}>
           <div style={{ textAlign: 'center' }}>
-            <span style={{ fontSize: '3rem' }}>🔒</span>
-            <h2 style={{ fontFamily: 'var(--font-display)', marginTop: '0.5rem', color: '#fff' }}>Secure Portal</h2>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-              Enter the administration passcode to access the NEET PG Question Analyzer.
+            <span style={{ fontSize: '3.5rem' }}>🩺</span>
+            <h2 style={{ fontFamily: 'var(--font-display)', marginTop: '1rem', color: '#fff', fontSize: '1.75rem', fontWeight: 800 }}>NEET PG Console</h2>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.5rem', lineHeight: '1.5' }}>
+              Sign in with your Google Account to access the Ingestion & Analytics Dashboard.
             </p>
           </div>
           
-          <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                Passcode
-              </label>
-              <input 
-                type="password" 
-                className="form-control"
-                placeholder="Enter passcode..."
-                value={passcodeInput}
-                onChange={(e) => setPasscodeInput(e.target.value)}
-                required
-                autoFocus
-              />
-              {authError && (
-                <span style={{ fontSize: '0.75rem', color: '#ff6b6b', marginTop: '0.25rem' }}>
-                  ⚠️ {authError}
-                </span>
-              )}
-            </div>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', width: '100%' }}>
+            {/* The Google Sign-In Button is rendered here by the SDK */}
+            <div id="google-login-btn-parent" style={{ display: 'flex', justifyContent: 'center', width: '100%', minHeight: '40px' }}></div>
             
-            <button type="submit" className="btn btn-cyan" style={{ padding: '0.75rem', borderRadius: '8px', border: 'none', fontWeight: 600 }}>
-              Unlock Dashboard
-            </button>
-          </form>
+            {authError && (
+              <div style={{ fontSize: '0.8rem', color: '#ff6b6b', textAlign: 'center', marginTop: '0.5rem', padding: '0.5rem 1rem', borderRadius: '6px', background: 'rgba(255, 107, 107, 0.1)', border: '1px solid rgba(255, 107, 107, 0.2)', width: '100%' }}>
+                ⚠️ {authError}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -713,6 +745,36 @@ function App() {
           >
             ⚙️ Settings
           </button>
+          
+          {userProfile && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginLeft: '1.5rem', paddingLeft: '1.5rem', borderLeft: '1px solid rgba(255, 255, 255, 0.1)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                {userProfile.picture ? (
+                  <img 
+                    src={userProfile.picture} 
+                    alt={userProfile.name} 
+                    style={{ width: '32px', height: '32px', borderRadius: '50%', border: '1.5px solid var(--neon-cyan)' }}
+                  />
+                ) : (
+                  <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--neon-purple)', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold', fontSize: '0.85rem' }}>
+                    {userProfile.name.charAt(0)}
+                  </div>
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff', lineHeight: '1.2' }}>{userProfile.name}</span>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{userProfile.email}</span>
+                </div>
+              </div>
+              <button 
+                onClick={handleLogout}
+                style={{ background: 'rgba(255, 107, 107, 0.1)', border: '1px solid rgba(255, 107, 107, 0.2)', color: '#ff6b6b', padding: '0.35rem 0.75rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}
+                onMouseEnter={(e) => { e.target.style.background = 'rgba(255, 107, 107, 0.2)'; }}
+                onMouseLeave={(e) => { e.target.style.background = 'rgba(255, 107, 107, 0.1)'; }}
+              >
+                Sign Out
+              </button>
+            </div>
+          )}
         </nav>
       </header>
 
