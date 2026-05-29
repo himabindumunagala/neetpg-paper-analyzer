@@ -69,23 +69,34 @@ function App() {
     setAuthChecking(false);
   }, []);
 
-  // Initialize and poll data
+  // Initialize static dashboard stats on mount
   useEffect(() => {
     if (!isAuthenticated) return;
     fetchHistory();
     fetchQuestions();
     fetchSummaryStats();
     fetchSystemLogs();
-    
-    // Poll queue status and logs every 3 seconds for real-time console feeling
+  }, [isAuthenticated]);
+
+  // Active status polling loop: only triggers when there is a PENDING or PROCESSING file in the queue
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const hasActiveJob = uploadHistory.some(
+      job => job.Processing_Status === 'PENDING' || job.Processing_Status === 'PROCESSING'
+    );
+
+    if (!hasActiveJob) return;
+
+    // Poll queue status, logs, and summary statistics every 3 seconds for active feedback
     const interval = setInterval(() => {
       fetchHistory();
       fetchSystemLogs();
       fetchSummaryStats();
     }, 3000);
-    
+
     return () => clearInterval(interval);
-  }, [isAuthenticated]);
+  }, [isAuthenticated, uploadHistory]);
 
   // Handle SPA Hash Routing
   useEffect(() => {
