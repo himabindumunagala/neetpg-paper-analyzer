@@ -1,10 +1,11 @@
+require('dotenv').config();
 const mongoose = require('mongoose');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
 
-const mongoUri = process.env.MONGODB_URI;
-const isMongoMode = !!mongoUri;
+const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/neetpg';
+const isMongoMode = true; // MongoDB is uniform across both local and production
 
 let db;
 let dbQuery = {};
