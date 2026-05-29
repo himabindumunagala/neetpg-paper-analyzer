@@ -4,6 +4,7 @@ const https = require('https');
 const { v4: uuidv4 } = require('uuid');
 const { dbQuery } = require('../config/database');
 const { classifyQuestion } = require('./classificationEngine');
+const { uploadImage } = require('./imageStorage');
 
 // Ensure image upload directories exist
 const uploadBaseDir = process.env.UPLOAD_DIR || path.resolve(__dirname, '../public/uploads');
@@ -516,21 +517,17 @@ function computeImageAffinityScore(text) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Save a diagram to disk and return the web-accessible path
+// Save a diagram using imageStorage adapter (Cloudinary or local filesystem)
 // ─────────────────────────────────────────────────────────────────────────────
-function saveDiagramToDisk(questionId, imageData) {
-  const physicalPath = path.join(imageDir, `${questionId}.png`);
-  fs.writeFileSync(physicalPath, imageData);
-  return `/uploads/images/${questionId}.png`;
+async function saveDiagramToDisk(questionId, imageData) {
+  return uploadImage(`${questionId}.png`, imageData);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Save option visual graphics to disk and return paths
+// Save option visual graphics using imageStorage adapter (Cloudinary or local fallback)
 // ─────────────────────────────────────────────────────────────────────────────
-function saveOptionImageToDisk(questionId, optionLetter, imageData) {
-  const physicalPath = path.join(imageDir, `${questionId}_opt${optionLetter}.png`);
-  fs.writeFileSync(physicalPath, imageData);
-  return `/uploads/images/${questionId}_opt${optionLetter}.png`;
+async function saveOptionImageToDisk(questionId, optionLetter, imageData) {
+  return uploadImage(`${questionId}_opt${optionLetter}.png`, imageData);
 }
 
 function hasNoTextOptions(q) {
@@ -789,19 +786,19 @@ async function assignDiagramsAndInsert(parsedQuestions, flatDiagrams, pageDiagra
           const diagD = diagsLeft.length > 3 ? diagsLeft[3] : null;
           
           if (diagA) {
-            q.optA = saveOptionImageToDisk(q.preGenId, 'A', diagA.data);
+            q.optA = await saveOptionImageToDisk(q.preGenId, 'A', diagA.data);
             diagA.assigned = true;
           }
           if (diagB) {
-            q.optB = saveOptionImageToDisk(q.preGenId, 'B', diagB.data);
+            q.optB = await saveOptionImageToDisk(q.preGenId, 'B', diagB.data);
             diagB.assigned = true;
           }
           if (diagC) {
-            q.optC = saveOptionImageToDisk(q.preGenId, 'C', diagC.data);
+            q.optC = await saveOptionImageToDisk(q.preGenId, 'C', diagC.data);
             diagC.assigned = true;
           }
           if (diagD && hasOptD) {
-            q.optD = saveOptionImageToDisk(q.preGenId, 'D', diagD.data);
+            q.optD = await saveOptionImageToDisk(q.preGenId, 'D', diagD.data);
             diagD.assigned = true;
           } else {
             q.optD = '';
@@ -899,7 +896,7 @@ async function assignDiagramsAndInsert(parsedQuestions, flatDiagrams, pageDiagra
     let imageDesc = null;
 
     if (q.assignedDiagram) {
-      imagePath = saveDiagramToDisk(questionId, q.assignedDiagram.data);
+      imagePath = await saveDiagramToDisk(questionId, q.assignedDiagram.data);
       imagePresent = true;
       imageDesc = `Clinical diagram extracted from PDF Page ${q.assignedDiagram.page} for Question ${q.qNum}`;
       logToExecutionFile('INFO',
