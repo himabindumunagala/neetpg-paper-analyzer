@@ -785,14 +785,17 @@ app.post('/api/auth/google', async (req, res) => {
     const name = payload.name;
     const picture = payload.picture;
 
-    // Check if email authorization whitelist is configured
+    // Determine user role based on allowed emails config
+    let userRole = 'Student';
     const allowedEmailsEnv = process.env.ALLOWED_EMAILS;
     if (allowedEmailsEnv) {
       const allowedEmails = allowedEmailsEnv.split(',').map(e => e.trim().toLowerCase());
-      if (!allowedEmails.includes(email.toLowerCase())) {
-        logToExecutionFile('WARN', `Blocked unauthorized login attempt from email: ${email}`);
-        return res.status(403).json({ error: 'Access denied: Your email is not authorized to access this dashboard.' });
+      if (allowedEmails.includes(email.toLowerCase())) {
+        userRole = 'Admin';
       }
+    } else {
+      // Default to Admin if whitelist is not configured
+      userRole = 'Admin';
     }
 
     const { models } = require('./config/database');
@@ -808,6 +811,7 @@ app.post('/api/auth/google', async (req, res) => {
       if (user) {
         user.Google_ID = googleId;
         user.Picture = picture || user.Picture;
+        user.Role = userRole;
         user.Last_Login = new Date();
         await user.save();
       } else {
@@ -817,13 +821,15 @@ app.post('/api/auth/google', async (req, res) => {
           Email: email,
           Name: name,
           Picture: picture,
+          Role: userRole,
           Last_Login: new Date()
         });
-        logToExecutionFile('INFO', `New user registered via Google Sign-In: ${email} (${name})`);
+        logToExecutionFile('INFO', `New user registered via Google Sign-In: ${email} (${name}) with role ${userRole}`);
       }
     } else {
       user.Name = name;
       user.Picture = picture;
+      user.Role = userRole; // Dynamically update role if env config changes
       user.Last_Login = new Date();
       await user.save();
     }
@@ -834,7 +840,8 @@ app.post('/api/auth/google', async (req, res) => {
         email: user.Email,
         name: user.Name,
         picture: user.Picture,
-        googleId: user.Google_ID
+        googleId: user.Google_ID,
+        role: user.Role
       }
     });
 

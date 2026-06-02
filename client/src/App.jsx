@@ -696,6 +696,109 @@ function App() {
     );
   }
 
+  if (userProfile && userProfile.role === 'Student') {
+    return (
+      <div className="app-container" style={{ display: 'flex', flexDirection: 'column', minHeight: '90vh', justifyContent: 'center', alignItems: 'center', padding: '2rem 1.5rem' }}>
+        <div className="panel-card" style={{ maxWidth: '800px', width: '100%', padding: '3.5rem 3rem', display: 'flex', flexDirection: 'column', gap: '2.5rem', position: 'relative', overflow: 'hidden' }}>
+          
+          {/* Subtle neon glowing light backgrounds inside the card */}
+          <div style={{ position: 'absolute', top: '-10%', left: '-10%', width: '30%', height: '30%', background: 'radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, transparent 70%)', pointerEvents: 'none' }}></div>
+          <div style={{ position: 'absolute', bottom: '-10%', right: '-10%', width: '30%', height: '30%', background: 'radial-gradient(circle, rgba(6, 182, 212, 0.15) 0%, transparent 70%)', pointerEvents: 'none' }}></div>
+
+          {/* Header section in the card */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-glass)', paddingBottom: '1.5rem', flexWrap: 'wrap', gap: '1.25rem', zIndex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+              <div className="logo-badge" style={{ padding: '0.4rem 0.75rem', fontSize: '1.3rem' }}>🩺</div>
+              <div>
+                <h2 style={{ fontSize: '1.6rem', fontWeight: 800, fontFamily: 'var(--font-display)', background: 'linear-gradient(135deg, #ffffff 40%, var(--accent-cyan) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                  NEET PG Student Portal
+                </h2>
+                <span className="status-badge completed" style={{ background: 'rgba(6, 182, 212, 0.12)', color: 'var(--accent-cyan)', fontSize: '0.7rem', marginTop: '0.25rem', display: 'inline-block', border: '1px solid rgba(6, 182, 212, 0.2)' }}>
+                  Student Hub
+                </span>
+              </div>
+            </div>
+            
+            {userProfile && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  {userProfile.picture ? (
+                    <img 
+                      src={userProfile.picture} 
+                      alt={userProfile.name} 
+                      style={{ width: '36px', height: '36px', borderRadius: '50%', border: '2px solid var(--accent-cyan)', boxShadow: '0 0 10px rgba(6, 182, 212, 0.3)' }}
+                    />
+                  ) : (
+                    <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'var(--accent-violet)', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold', fontSize: '0.9rem', color: '#fff' }}>
+                      {userProfile.name.charAt(0)}
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff', lineHeight: '1.2' }}>{userProfile.name}</span>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{userProfile.email}</span>
+                  </div>
+                </div>
+                <button 
+                  onClick={handleLogout}
+                  style={{ background: 'rgba(244, 63, 94, 0.1)', border: '1px solid rgba(244, 63, 94, 0.2)', color: 'var(--danger-rose)', padding: '0.45rem 1rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', transition: 'var(--transition-smooth)' }}
+                  onMouseEnter={(e) => { e.target.style.background = 'rgba(244, 63, 94, 0.2)'; }}
+                  onMouseLeave={(e) => { e.target.style.background = 'rgba(244, 63, 94, 0.1)'; }}
+                >
+                  Sign Out
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Hero Section */}
+          <div style={{ textAlign: 'center', padding: '1rem 0', zIndex: 1 }}>
+            <span style={{ fontSize: '3.5rem', display: 'block', marginBottom: '1rem', animation: 'bounce 2s infinite ease-in-out' }}>🚀</span>
+            <h3 style={{ fontSize: '2rem', color: '#fff', marginBottom: '0.75rem', fontFamily: 'var(--font-display)', fontWeight: 800 }}>
+              The Student Hub is Coming Soon!
+            </h3>
+            <p style={{ color: 'var(--text-secondary)', maxWidth: '620px', margin: '0 auto', fontSize: '0.95rem', lineHeight: '1.6' }}>
+              Welcome, Dr. {userProfile.name.split(' ')[0]}! The admin team is currently indexing high-yield NEET PG question banks. Once complete, you will have full access to study modules, visual diagrams, and performance analysis metrics.
+            </p>
+          </div>
+
+          {/* Features Grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.5rem', zIndex: 1 }}>
+            <div className="panel-card" style={{ background: 'rgba(255,255,255,0.015)', border: '1px solid var(--border-glass)', padding: '1.5rem', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <span style={{ fontSize: '1.75rem', display: 'block', marginBottom: '0.25rem' }}>📝</span>
+              <h4 style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 700 }}>Adaptive Mock Exams</h4>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+                Take customized practice tests generated dynamically from high-yield subjects and historical trends.
+              </p>
+            </div>
+            
+            <div className="panel-card" style={{ background: 'rgba(255,255,255,0.015)', border: '1px solid var(--border-glass)', padding: '1.5rem', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <span style={{ fontSize: '1.75rem', display: 'block', marginBottom: '0.25rem' }}>🎴</span>
+              <h4 style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 700 }}>Visual Flashcards</h4>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+                Active recall flashcards complete with medical diagrams and high-fidelity image identifications.
+              </p>
+            </div>
+
+            <div className="panel-card" style={{ background: 'rgba(255,255,255,0.015)', border: '1px solid var(--border-glass)', padding: '1.5rem', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <span style={{ fontSize: '1.75rem', display: 'block', marginBottom: '0.25rem' }}>📈</span>
+              <h4 style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 700 }}>AI Performance</h4>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+                Identify your strength areas and weak points across 19 subjects with custom yield recommendations.
+              </p>
+            </div>
+          </div>
+
+          {/* Footer Info */}
+          <div style={{ display: 'flex', justifyContent: 'center', textAlign: 'center', borderTop: '1px solid var(--border-glass)', paddingTop: '1.5rem', zIndex: 1 }}>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', maxWidth: '500px', lineHeight: '1.5' }}>
+              If you require access to the Ingestion Console, please request your administrator to add <strong>{userProfile.email}</strong> to the whitelisted emails configuration.
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="app-container">
       {/* Header Bar */}
