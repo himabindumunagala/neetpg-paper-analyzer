@@ -40,6 +40,16 @@ function App() {
   const [trendsLoading, setTrendsLoading] = useState(false);
   const [trendsViewMode, setTrendsViewMode] = useState('matrix'); // 'matrix' or 'flat'
   
+  // Student specific states
+  const [studentTab, setStudentTab] = useState('dashboard');
+  const [quizSettings, setQuizSettings] = useState({ subject: 'All', year: 'All', limit: 10 });
+  const [quizQuestions, setQuizQuestions] = useState([]);
+  const [currentQuizIdx, setCurrentQuizIdx] = useState(0);
+  const [quizSelectedAnswers, setQuizSelectedAnswers] = useState({});
+  const [isQuizActive, setIsQuizActive] = useState(false);
+  const [isQuizCompleted, setIsQuizCompleted] = useState(false);
+  const [quizScore, setQuizScore] = useState(0);
+
   // Settings Configuration States
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [geminiKeyExists, setGeminiKeyExists] = useState(false);
@@ -169,46 +179,64 @@ function App() {
 
     return () => clearInterval(interval);
   }, [isAuthenticated, uploadHistory]);
-
   // Handle SPA Hash Routing
   useEffect(() => {
     if (!isAuthenticated) return;
     const handleHashChange = () => {
       const hash = window.location.hash;
-      if (hash === '#/dashboard') {
-        setActiveTab('dashboard');
-      } else if (hash === '#/question-bank') {
-        setActiveTab('questions');
-      } else if (hash === '#/trends') {
-        setActiveTab('analytics');
-      } else if (hash === '#/console') {
-        setActiveTab('settings');
+      const isStudent = userProfile && userProfile.role === 'Student';
+      
+      if (isStudent) {
+        if (hash === '#/dashboard') {
+          setStudentTab('dashboard');
+        } else if (hash === '#/practice') {
+          setStudentTab('practice');
+        } else if (hash === '#/question-bank') {
+          setStudentTab('questions');
+        } else if (hash === '#/trends') {
+          setStudentTab('trends');
+        } else {
+          window.location.hash = '#/dashboard';
+          setStudentTab('dashboard');
+        }
       } else {
-        window.location.hash = '#/dashboard';
-        setActiveTab('dashboard');
+        if (hash === '#/dashboard') {
+          setActiveTab('dashboard');
+        } else if (hash === '#/question-bank') {
+          setActiveTab('questions');
+        } else if (hash === '#/trends') {
+          setActiveTab('analytics');
+        } else if (hash === '#/console') {
+          setActiveTab('settings');
+        } else {
+          window.location.hash = '#/dashboard';
+          setActiveTab('dashboard');
+        }
       }
     };
 
     handleHashChange();
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
-  }, [isAuthenticated]);
+  }, [isAuthenticated, userProfile]);
 
   // Fetch trends when analytics tab becomes active
   useEffect(() => {
     if (!isAuthenticated) return;
-    if (activeTab === 'analytics') {
+    const isStudent = userProfile && userProfile.role === 'Student';
+    if ((!isStudent && activeTab === 'analytics') || (isStudent && studentTab === 'trends')) {
       fetchTrendsMatrix();
     }
-  }, [activeTab, isAuthenticated]);
+  }, [activeTab, studentTab, isAuthenticated, userProfile]);
 
   // Re-fetch questions when filters or active tab changes (Auto-Refresh)
   useEffect(() => {
     if (!isAuthenticated) return;
-    if (activeTab === 'questions') {
+    const isStudent = userProfile && userProfile.role === 'Student';
+    if ((!isStudent && activeTab === 'questions') || (isStudent && studentTab === 'questions')) {
       fetchQuestions();
     }
-  }, [activeTab, subjectFilter, difficultyFilter, yearFilter, uploadFilter, imageFilter, searchTerm, page, itemsPerPage, isAuthenticated]);
+  }, [activeTab, studentTab, subjectFilter, difficultyFilter, yearFilter, uploadFilter, imageFilter, searchTerm, page, itemsPerPage, isAuthenticated, userProfile]);
 
   // Scroll logs console to bottom
   useEffect(() => {
@@ -696,40 +724,102 @@ function App() {
     );
   }
 
+  const startQuiz = async () => {
+    try {
+      let url = `/api/questions?limit=${quizSettings.limit}`;
+      if (quizSettings.subject !== 'All') {
+        url += `&subject=${encodeURIComponent(quizSettings.subject)}`;
+      }
+      if (quizSettings.year !== 'All') {
+        url += `&year=${encodeURIComponent(quizSettings.year)}`;
+      }
+      
+      const response = await fetch(url);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.questions && data.questions.length > 0) {
+          const shuffled = [...data.questions].sort(() => 0.5 - Math.random());
+          setQuizQuestions(shuffled);
+          setCurrentQuizIdx(0);
+          setQuizSelectedAnswers({});
+          setIsQuizActive(true);
+          setIsQuizCompleted(false);
+          setQuizScore(0);
+        } else {
+          alert('No questions found matching the selected filters.');
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load quiz questions:', err);
+    }
+  };
+
+  const handleSelectQuizAnswer = (option) => {
+    if (quizSelectedAnswers[currentQuizIdx] !== undefined) return;
+    
+    const correctAns = quizQuestions[currentQuizIdx].Correct_Answer;
+    const updatedAnswers = { ...quizSelectedAnswers, [currentQuizIdx]: option };
+    setQuizSelectedAnswers(updatedAnswers);
+    
+    if (option === correctAns) {
+      setQuizScore(s => s + 1);
+    }
+  };
+
   if (userProfile && userProfile.role === 'Student') {
     return (
-      <div className="app-container" style={{ display: 'flex', flexDirection: 'column', minHeight: '90vh', justifyContent: 'center', alignItems: 'center', padding: '2rem 1.5rem' }}>
-        <div className="panel-card" style={{ maxWidth: '800px', width: '100%', padding: '3.5rem 3rem', display: 'flex', flexDirection: 'column', gap: '2.5rem', position: 'relative', overflow: 'hidden' }}>
-          
-          {/* Subtle neon glowing light backgrounds inside the card */}
-          <div style={{ position: 'absolute', top: '-10%', left: '-10%', width: '30%', height: '30%', background: 'radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, transparent 70%)', pointerEvents: 'none' }}></div>
-          <div style={{ position: 'absolute', bottom: '-10%', right: '-10%', width: '30%', height: '30%', background: 'radial-gradient(circle, rgba(6, 182, 212, 0.15) 0%, transparent 70%)', pointerEvents: 'none' }}></div>
-
-          {/* Header section in the card */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-glass)', paddingBottom: '1.5rem', flexWrap: 'wrap', gap: '1.25rem', zIndex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-              <div className="logo-badge" style={{ padding: '0.4rem 0.75rem', fontSize: '1.3rem' }}>🩺</div>
-              <div>
-                <h2 style={{ fontSize: '1.6rem', fontWeight: 800, fontFamily: 'var(--font-display)', background: 'linear-gradient(135deg, #ffffff 40%, var(--accent-cyan) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                  NEET PG Student Portal
-                </h2>
-                <span className="status-badge completed" style={{ background: 'rgba(6, 182, 212, 0.12)', color: 'var(--accent-cyan)', fontSize: '0.7rem', marginTop: '0.25rem', display: 'inline-block', border: '1px solid rgba(6, 182, 212, 0.2)' }}>
-                  Student Hub
-                </span>
-              </div>
+      <div className="app-container">
+        {/* Student Header */}
+        <header className="header">
+          <div className="header-logo">
+            <div className="logo-badge" style={{ background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-violet))' }}>🩺</div>
+            <div>
+              <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.4rem' }}>
+                NEET PG Student Portal
+              </h2>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                Interactive Study & Quiz Environment
+              </span>
             </div>
+          </div>
+          
+          <nav className="nav-tabs">
+            <button 
+              className={`nav-tab ${studentTab === 'dashboard' ? 'active' : ''}`}
+              onClick={() => window.location.hash = '#/dashboard'}
+            >
+              Dashboard
+            </button>
+            <button 
+              className={`nav-tab ${studentTab === 'practice' ? 'active' : ''}`}
+              onClick={() => window.location.hash = '#/practice'}
+            >
+              Interactive Quiz
+            </button>
+            <button 
+              className={`nav-tab ${studentTab === 'questions' ? 'active' : ''}`}
+              onClick={() => window.location.hash = '#/question-bank'}
+            >
+              Question Bank
+            </button>
+            <button 
+              className={`nav-tab ${studentTab === 'trends' ? 'active' : ''}`}
+              onClick={() => window.location.hash = '#/trends'}
+            >
+              Weightage Trends
+            </button>
             
             {userProfile && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginLeft: '1.5rem', paddingLeft: '1.5rem', borderLeft: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   {userProfile.picture ? (
                     <img 
                       src={userProfile.picture} 
                       alt={userProfile.name} 
-                      style={{ width: '36px', height: '36px', borderRadius: '50%', border: '2px solid var(--accent-cyan)', boxShadow: '0 0 10px rgba(6, 182, 212, 0.3)' }}
+                      style={{ width: '32px', height: '32px', borderRadius: '50%', border: '1.5px solid var(--accent-cyan)' }}
                     />
                   ) : (
-                    <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'var(--accent-violet)', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold', fontSize: '0.9rem', color: '#fff' }}>
+                    <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--accent-violet)', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold', fontSize: '0.85rem' }}>
                       {userProfile.name.charAt(0)}
                     </div>
                   )}
@@ -740,61 +830,629 @@ function App() {
                 </div>
                 <button 
                   onClick={handleLogout}
-                  style={{ background: 'rgba(244, 63, 94, 0.1)', border: '1px solid rgba(244, 63, 94, 0.2)', color: 'var(--danger-rose)', padding: '0.45rem 1rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', transition: 'var(--transition-smooth)' }}
-                  onMouseEnter={(e) => { e.target.style.background = 'rgba(244, 63, 94, 0.2)'; }}
-                  onMouseLeave={(e) => { e.target.style.background = 'rgba(244, 63, 94, 0.1)'; }}
+                  style={{ background: 'rgba(255, 107, 107, 0.1)', border: '1px solid rgba(255, 107, 107, 0.2)', color: '#ff6b6b', padding: '0.35rem 0.75rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}
                 >
                   Sign Out
                 </button>
               </div>
             )}
-          </div>
+          </nav>
+        </header>
 
-          {/* Hero Section */}
-          <div style={{ textAlign: 'center', padding: '1rem 0', zIndex: 1 }}>
-            <span style={{ fontSize: '3.5rem', display: 'block', marginBottom: '1rem', animation: 'bounce 2s infinite ease-in-out' }}>🚀</span>
-            <h3 style={{ fontSize: '2rem', color: '#fff', marginBottom: '0.75rem', fontFamily: 'var(--font-display)', fontWeight: 800 }}>
-              The Student Hub is Coming Soon!
-            </h3>
-            <p style={{ color: 'var(--text-secondary)', maxWidth: '620px', margin: '0 auto', fontSize: '0.95rem', lineHeight: '1.6' }}>
-              Welcome, Dr. {userProfile.name.split(' ')[0]}! The admin team is currently indexing high-yield NEET PG question banks. Once complete, you will have full access to study modules, visual diagrams, and performance analysis metrics.
-            </p>
-          </div>
-
-          {/* Features Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.5rem', zIndex: 1 }}>
-            <div className="panel-card" style={{ background: 'rgba(255,255,255,0.015)', border: '1px solid var(--border-glass)', padding: '1.5rem', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <span style={{ fontSize: '1.75rem', display: 'block', marginBottom: '0.25rem' }}>📝</span>
-              <h4 style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 700 }}>Adaptive Mock Exams</h4>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
-                Take customized practice tests generated dynamically from high-yield subjects and historical trends.
-              </p>
-            </div>
-            
-            <div className="panel-card" style={{ background: 'rgba(255,255,255,0.015)', border: '1px solid var(--border-glass)', padding: '1.5rem', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <span style={{ fontSize: '1.75rem', display: 'block', marginBottom: '0.25rem' }}>🎴</span>
-              <h4 style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 700 }}>Visual Flashcards</h4>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
-                Active recall flashcards complete with medical diagrams and high-fidelity image identifications.
-              </p>
-            </div>
-
-            <div className="panel-card" style={{ background: 'rgba(255,255,255,0.015)', border: '1px solid var(--border-glass)', padding: '1.5rem', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <span style={{ fontSize: '1.75rem', display: 'block', marginBottom: '0.25rem' }}>📈</span>
-              <h4 style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 700 }}>AI Performance</h4>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
-                Identify your strength areas and weak points across 19 subjects with custom yield recommendations.
-              </p>
+        {/* Global Student Stats */}
+        <section className="stats-strip">
+          <div className="stat-box purple">
+            <span className="stat-label">Total Practice Bank</span>
+            <div className="stat-value">
+              {stats.totalQuestions || 0} <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Questions</span>
             </div>
           </div>
-
-          {/* Footer Info */}
-          <div style={{ display: 'flex', justifyContent: 'center', textAlign: 'center', borderTop: '1px solid var(--border-glass)', paddingTop: '1.5rem', zIndex: 1 }}>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', maxWidth: '500px', lineHeight: '1.5' }}>
-              If you require access to the Ingestion Console, please request your administrator to add <strong>{userProfile.email}</strong> to the whitelisted emails configuration.
-            </span>
+          <div className="stat-box cyan">
+            <span className="stat-label">Available Subjects</span>
+            <div className="stat-value">
+              {stats.subjects ? stats.subjects.length : 0} <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Subjects</span>
+            </div>
           </div>
-        </div>
+          <div className="stat-box emerald">
+            <span className="stat-label">Image-based Qs</span>
+            <div className="stat-value">
+              {stats.imageCount || 0} <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Visual Diagrams</span>
+            </div>
+          </div>
+        </section>
+
+        {/* Dynamic Tab Contents */}
+        {studentTab === 'dashboard' && (
+          <div className="dashboard-grid">
+            {/* Welcome Banner */}
+            <div className="panel-card" style={{ gridColumn: 'span 2' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
+                <div style={{ fontSize: '3rem' }}>🎯</div>
+                <div>
+                  <h3 style={{ fontSize: '1.6rem', color: '#fff', marginBottom: '0.5rem' }}>Welcome to Your NEET PG Workspace, Dr. {userProfile.name.split(' ')[0]}!</h3>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: '1.6' }}>
+                    Access high-yield exam recall items, practice custom quiz sets by subject, and visualize clinical trends to maximize your scores.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Cards */}
+            <div className="panel-card" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <h3 className="panel-title"><span>📝</span> Start a Daily Challenge</h3>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
+                Jump straight into a fast-paced quiz consisting of 10 random clinical scenario recall questions.
+              </p>
+              <button 
+                className="btn btn-cyan" 
+                style={{ width: '100%', padding: '0.75rem', fontWeight: 600, display: 'inline-flex', justifyContent: 'center', gap: '0.5rem' }}
+                onClick={() => {
+                  setQuizSettings({ subject: 'All', year: 'All', limit: 10 });
+                  window.location.hash = '#/practice';
+                  setTimeout(startQuiz, 100);
+                }}
+              >
+                ⚡ Start 10-Question Challenge
+              </button>
+            </div>
+
+            <div className="panel-card">
+              <h3 className="panel-title"><span>🔮</span> High-Yield Topic Predictions</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', marginTop: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem', borderBottom: '1px solid var(--border-glass)' }}>
+                  <span style={{ fontSize: '0.85rem' }}>Cardiology: Coronary Occlusions</span>
+                  <span className="status-badge completed" style={{ fontSize: '0.7rem' }}>94% Yield</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem', borderBottom: '1px solid var(--border-glass)' }}>
+                  <span style={{ fontSize: '0.85rem' }}>Thyroid Pathology: Histological features</span>
+                  <span className="status-badge completed" style={{ fontSize: '0.7rem' }}>88% Yield</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem' }}>
+                  <span style={{ fontSize: '0.85rem' }}>Neonatology: Ground-glass RDS signs</span>
+                  <span className="status-badge pending" style={{ fontSize: '0.7rem' }}>76% Yield</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {studentTab === 'practice' && (
+          <div className="panel-card" style={{ minHeight: '500px' }}>
+            {!isQuizActive && !isQuizCompleted ? (
+              /* Quiz Configuration Screen */
+              <div style={{ maxWidth: '500px', margin: '2rem auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
+                  <span style={{ fontSize: '2.5rem' }}>📚</span>
+                  <h3 style={{ fontSize: '1.5rem', color: '#fff', marginTop: '0.5rem' }}>Configure Practice Session</h3>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Pick target criteria to load an active recall challenge.</p>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Select Subject</label>
+                  <select 
+                    className="form-control"
+                    value={quizSettings.subject}
+                    onChange={(e) => setQuizSettings({ ...quizSettings, subject: e.target.value })}
+                  >
+                    <option value="All">All Subjects</option>
+                    {stats.subjects && stats.subjects.map(s => (
+                      <option key={s.Subject} value={s.Subject}>{s.Subject}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Select Year</label>
+                  <select 
+                    className="form-control"
+                    value={quizSettings.year}
+                    onChange={(e) => setQuizSettings({ ...quizSettings, year: e.target.value })}
+                  >
+                    <option value="All">All Years</option>
+                    {stats.years && stats.years.map(y => (
+                      <option key={y.year} value={y.year}>{y.year}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Number of Questions</label>
+                  <select 
+                    className="form-control"
+                    value={quizSettings.limit}
+                    onChange={(e) => setQuizSettings({ ...quizSettings, limit: parseInt(e.target.value) })}
+                  >
+                    <option value={5}>5 Questions</option>
+                    <option value={10}>10 Questions</option>
+                    <option value={20}>20 Questions</option>
+                  </select>
+                </div>
+
+                <button className="btn btn-cyan" style={{ marginTop: '1rem', padding: '0.75rem', fontWeight: 600 }} onClick={startQuiz}>
+                  🚀 Start Practice Quiz
+                </button>
+              </div>
+            ) : isQuizActive && quizQuestions.length > 0 ? (
+              /* Active Quiz Screen */
+              (() => {
+                const q = quizQuestions[currentQuizIdx];
+                const selectedAns = quizSelectedAnswers[currentQuizIdx];
+                const isAnswered = selectedAns !== undefined;
+                
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-glass)', paddingBottom: '1rem' }}>
+                      <div>
+                        <span className="badge subject">{q.Subject}</span>
+                        <span className="badge difficulty" style={{ marginLeft: '0.5rem' }}>{q.Difficulty_Level}</span>
+                      </div>
+                      <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                        Question {currentQuizIdx + 1} of {quizQuestions.length}
+                      </span>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div style={{ background: 'rgba(255,255,255,0.05)', height: '6px', borderRadius: '99px', overflow: 'hidden' }}>
+                      <div style={{ background: 'var(--accent-cyan)', height: '100%', width: `${((currentQuizIdx + 1) / quizQuestions.length) * 100}%`, transition: 'width 0.2s' }}></div>
+                    </div>
+
+                    <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-glass)', padding: '1.5rem', borderRadius: '12px' }}>
+                      <p style={{ fontWeight: 500, fontSize: '1.1rem', lineHeight: '1.6' }}>{q.Question_Text}</p>
+                    </div>
+
+                    {/* Medical diagram if present */}
+                    {(q.Image_Present === 1 || q.Image_Present === true) && q.Embedded_Image && (
+                      <div style={{ display: 'flex', justifyContent: 'center', background: '#fff', padding: '12px', borderRadius: '12px', border: '1px solid var(--border-glass)' }}>
+                        <img src={q.Embedded_Image} alt="Recall Diagram" style={{ maxHeight: '280px', objectFit: 'contain', cursor: 'zoom-in' }} onClick={() => setZoomedImage(q.Embedded_Image)} />
+                      </div>
+                    )}
+
+                    {/* Options list */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.5rem' }}>
+                      {['A', 'B', 'C', 'D'].map(opt => {
+                        const optText = q[`Option_${opt}`];
+                        if (!optText) return null;
+                        
+                        const isCorrect = q.Correct_Answer === opt;
+                        const isSelected = selectedAns === opt;
+                        
+                        let borderStyle = '1px solid var(--border-glass)';
+                        let bgStyle = 'rgba(255,255,255,0.02)';
+                        
+                        if (isAnswered) {
+                          if (isCorrect) {
+                            borderStyle = '2px solid var(--success-emerald)';
+                            bgStyle = 'rgba(16, 185, 129, 0.15)';
+                          } else if (isSelected) {
+                            borderStyle = '2px solid var(--danger-rose)';
+                            bgStyle = 'rgba(244, 63, 94, 0.15)';
+                          }
+                        }
+                        
+                        return (
+                          <div 
+                            key={opt}
+                            onClick={() => handleSelectQuizAnswer(opt)}
+                            style={{ 
+                              border: borderStyle,
+                              background: bgStyle,
+                              padding: '1.25rem',
+                              borderRadius: '12px',
+                              cursor: isAnswered ? 'default' : 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '1rem',
+                              transition: 'all 0.2s ease',
+                              minHeight: '65px'
+                            }}
+                            className={!isAnswered ? "table-row-hover" : ""}
+                          >
+                            <span style={{
+                              width: '28px',
+                              height: '28px',
+                              borderRadius: '50%',
+                              background: isAnswered && isCorrect ? 'var(--success-emerald)' : isAnswered && isSelected ? 'var(--danger-rose)' : 'rgba(255,255,255,0.1)',
+                              display: 'flex',
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                              fontWeight: 700,
+                              fontSize: '0.85rem'
+                            }}>{opt}</span>
+                            <div style={{ flex: 1 }}>{renderOptionText(optText)}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Explanation Box */}
+                    {isAnswered && q.Answer_Explanation && (
+                      <div className="explanation-box" style={{ marginTop: '1rem' }}>
+                        <h4 style={{ color: 'var(--accent-violet)', fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.5rem' }}>Clinical Rationale &amp; Answer Explanation</h4>
+                        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: '1.6' }}>{q.Answer_Explanation}</p>
+                      </div>
+                    )}
+
+                    {/* Next / Finish Navigation Button */}
+                    {isAnswered && (
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
+                        {currentQuizIdx < quizQuestions.length - 1 ? (
+                          <button className="btn btn-cyan" style={{ padding: '0.5rem 1.5rem' }} onClick={() => setCurrentQuizIdx(idx => idx + 1)}>
+                            Next Question →
+                          </button>
+                        ) : (
+                          <button className="btn btn-primary" style={{ padding: '0.5rem 1.5rem' }} onClick={() => setIsQuizCompleted(true)}>
+                            Finish Quiz 🏁
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()
+            ) : (
+              /* Quiz Finished/Results Screen */
+              <div style={{ maxWidth: '600px', margin: '2rem auto', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                <div>
+                  <span style={{ fontSize: '4rem' }}>🏆</span>
+                  <h3 style={{ fontSize: '1.8rem', color: '#fff', marginTop: '0.5rem', fontWeight: 800 }}>Practice Challenge Complete</h3>
+                  <p style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>Great job on finishing your study recall module!</p>
+                </div>
+
+                <div style={{ background: 'var(--bg-secondary)', padding: '2rem', borderRadius: '16px', border: '1px solid var(--border-glass)' }}>
+                  <span style={{ display: 'block', fontSize: '1.1rem', color: 'var(--text-secondary)' }}>Your Final Score</span>
+                  <span style={{ display: 'block', fontSize: '3rem', fontWeight: 800, color: 'var(--accent-cyan)', margin: '0.5rem 0' }}>
+                    {quizScore} <span style={{ fontSize: '1.5rem', color: 'var(--text-muted)' }}>/ {quizQuestions.length}</span>
+                  </span>
+                  <span className="status-badge completed" style={{ background: quizScore / quizQuestions.length >= 0.7 ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)', color: quizScore / quizQuestions.length >= 0.7 ? 'var(--success-emerald)' : 'var(--warning-amber)', padding: '0.35rem 1rem', fontSize: '0.85rem' }}>
+                    {quizScore / quizQuestions.length >= 0.7 ? 'High-Yield Performance!' : 'Needs Revision'}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+                  <button className="btn btn-cyan" style={{ padding: '0.65rem 1.5rem', fontWeight: 600 }} onClick={() => { setIsQuizCompleted(false); setIsQuizActive(false); }}>
+                    Practice Another Topic
+                  </button>
+                  <button className="btn btn-secondary" style={{ padding: '0.65rem 1.5rem' }} onClick={() => { setStudentTab('questions'); window.location.hash = '#/question-bank'; }}>
+                    Browse Question Bank
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {studentTab === 'questions' && (
+          <div className="panel-card" style={{ minHeight: '500px' }}>
+            <div className="panel-header">
+              <h3 className="panel-title"><span>📂</span> Browse High-Yield Question Bank</h3>
+              <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                <button 
+                  className="btn btn-secondary" 
+                  style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem', background: layoutMode === 'grid' ? 'rgba(139, 92, 246, 0.15)' : 'rgba(255,255,255,0.02)', color: layoutMode === 'grid' ? 'var(--text-primary)' : 'var(--text-secondary)', border: '1px solid var(--border-glass)', borderRadius: '8px', cursor: 'pointer' }}
+                  onClick={() => setLayoutMode('grid')}
+                >
+                  🎴 Card View
+                </button>
+                <button 
+                  className="btn btn-secondary" 
+                  style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem', background: layoutMode === 'table' ? 'rgba(139, 92, 246, 0.15)' : 'rgba(255,255,255,0.02)', color: layoutMode === 'table' ? 'var(--text-primary)' : 'var(--text-secondary)', border: '1px solid var(--border-glass)', borderRadius: '8px', cursor: 'pointer' }}
+                  onClick={() => setLayoutMode('table')}
+                >
+                  📋 Compact Table
+                </button>
+              </div>
+            </div>
+
+            {/* Read-Only Filter Row */}
+            <div className="filter-bar" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.75rem', marginBottom: '1.5rem' }}>
+              <input 
+                type="text" 
+                className="form-control"
+                placeholder="🔍 Search recall items..."
+                value={searchTerm}
+                onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
+              />
+              
+              <select 
+                className="form-control"
+                value={subjectFilter}
+                onChange={(e) => { setSubjectFilter(e.target.value); setPage(1); }}
+              >
+                <option value="All">All Subjects</option>
+                {stats.subjects && stats.subjects.map(s => (
+                  <option key={s.Subject} value={s.Subject}>{s.Subject} ({s.count})</option>
+                ))}
+              </select>
+
+              <select 
+                className="form-control"
+                value={difficultyFilter}
+                onChange={(e) => { setDifficultyFilter(e.target.value); setPage(1); }}
+              >
+                <option value="All">All Difficulties</option>
+                <option value="Easy">Easy</option>
+                <option value="Medium">Medium</option>
+                <option value="Hard">Hard</option>
+              </select>
+
+              <select 
+                className="form-control"
+                value={imageFilter}
+                onChange={(e) => { setImageFilter(e.target.value); setPage(1); }}
+              >
+                <option value="All">All Images</option>
+                <option value="Yes">With Images</option>
+                <option value="No">Without Images</option>
+              </select>
+
+              <select 
+                className="form-control"
+                value={yearFilter}
+                onChange={(e) => { setYearFilter(e.target.value); setPage(1); }}
+              >
+                <option value="All">All Years</option>
+                {stats.years && stats.years.map(y => (
+                  <option key={y.year} value={y.year}>{y.year} ({y.count})</option>
+                ))}
+              </select>
+
+              <select 
+                className="form-control"
+                value={itemsPerPage}
+                onChange={(e) => { setItemsPerPage(parseInt(e.target.value)); setPage(1); }}
+              >
+                <option value={25}>25 per page</option>
+                <option value={50}>50 per page</option>
+                <option value={100}>100 per page</option>
+              </select>
+            </div>
+
+            {/* Read-Only Questions Grid/Table */}
+            {questions.length === 0 ? (
+              <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '5rem' }}>
+                <span>🔍 No recall questions match the selected filter conditions</span>
+              </div>
+            ) : (
+              <>
+                {layoutMode === 'table' ? (
+                  <div style={{ overflowX: 'auto', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-glass)', borderRadius: '12px', marginBottom: '1.5rem' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+                      <thead>
+                        <tr style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid var(--border-glass)' }}>
+                          <th style={{ padding: '0.85rem 1rem', fontWeight: 600 }}>Q No</th>
+                          <th style={{ padding: '0.85rem 1rem', fontWeight: 600 }}>Subject</th>
+                          <th style={{ padding: '0.85rem 1rem', fontWeight: 600 }}>Question Text</th>
+                          <th style={{ padding: '0.85rem 1rem', fontWeight: 600 }}>Difficulty</th>
+                          <th style={{ padding: '0.85rem 1rem', fontWeight: 600 }}>Confidence</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {questions.map(q => (
+                          <tr 
+                            key={q.Question_ID} 
+                            onClick={() => viewQuestionDetails(q.Question_ID)}
+                            style={{ borderBottom: '1px solid var(--border-glass)', cursor: 'pointer', transition: 'background 0.2s' }}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.02)'}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                          >
+                            <td style={{ padding: '0.85rem 1rem', fontWeight: 700, color: 'var(--text-muted)' }}>{q.Question_Number}</td>
+                            <td style={{ padding: '0.85rem 1rem' }}>
+                              <span className="badge subject">{q.Subject}</span>
+                            </td>
+                            <td style={{ padding: '0.85rem 1rem', maxWidth: '420px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {q.Question_Text}
+                            </td>
+                            <td style={{ padding: '0.85rem 1rem' }}>
+                              <span className="badge difficulty">{q.Difficulty_Level}</span>
+                            </td>
+                            <td style={{ padding: '0.85rem 1rem' }}>
+                              <span className={`badge conf-${q.OCR_Confidence}`}>OCR {q.OCR_Confidence}</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="questions-grid">
+                    {questions.map(q => (
+                      <div key={q.Question_ID} className="question-card" onClick={() => viewQuestionDetails(q.Question_ID)}>
+                        <div className="q-card-header">
+                          <span className="q-num">Q. {q.Question_Number}</span>
+                          <span className={`badge conf-${q.OCR_Confidence}`}>OCR {q.OCR_Confidence}</span>
+                        </div>
+                        <p className="q-text">{q.Question_Text}</p>
+                        <div className="q-footer">
+                          <span className="badge subject">{q.Subject}</span>
+                          <span className="badge difficulty">{q.Difficulty_Level}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Pagination Controls */}
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginTop: '2rem', alignItems: 'center' }}>
+                  <button 
+                    className="btn btn-secondary" 
+                    style={{ padding: '0.4rem 1rem' }}
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                  >
+                    Previous
+                  </button>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                    Page {page} of {Math.ceil(totalQuestions / itemsPerPage) || 1}
+                  </span>
+                  <button 
+                    className="btn btn-secondary" 
+                    style={{ padding: '0.4rem 1rem' }}
+                    onClick={() => setPage(p => p + 1)}
+                    disabled={page >= Math.ceil(totalQuestions / itemsPerPage)}
+                  >
+                    Next
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {studentTab === 'trends' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+            {/* YoY Matrix */}
+            <div className="panel-card" style={{ width: '100%', padding: '1.75rem', overflow: 'hidden' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-glass)', paddingBottom: '1.25rem' }}>
+                <div>
+                  <h3 className="panel-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span>📈</span> Year-over-Year (YoY) Subject Analytics Matrix
+                  </h3>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+                    Analyze how many questions from each subject appeared in specific years and examine subject concentration heatmaps.
+                  </p>
+                </div>
+                <div style={{ display: 'flex', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-glass)', borderRadius: '8px', padding: '2px' }}>
+                  <button 
+                    className={`btn ${trendsViewMode === 'matrix' ? 'btn-primary' : ''}`}
+                    style={{ padding: '0.35rem 0.85rem', fontSize: '0.8rem', border: 'none', borderRadius: '6px', background: trendsViewMode === 'matrix' ? '' : 'transparent' }}
+                    onClick={() => setTrendsViewMode('matrix')}
+                  >
+                    📊 Matrix Grid
+                  </button>
+                  <button 
+                    className={`btn ${trendsViewMode === 'flat' ? 'btn-primary' : ''}`}
+                    style={{ padding: '0.35rem 0.85rem', fontSize: '0.8rem', border: 'none', borderRadius: '6px', background: trendsViewMode === 'flat' ? '' : 'transparent' }}
+                    onClick={() => setTrendsViewMode('flat')}
+                  >
+                    📋 Flat List
+                  </button>
+                </div>
+              </div>
+
+              {trendsLoading ? (
+                <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '5rem' }}>
+                  <span className="pulse-glow" style={{ display: 'inline-block', fontSize: '1.25rem', color: 'var(--accent-violet)' }}>
+                    ⚡ Loading YoY subject trends database records...
+                  </span>
+                </div>
+              ) : !trendsMatrix || !trendsMatrix.years || trendsMatrix.years.length === 0 ? (
+                <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '5rem' }}>
+                  No Year-over-Year trends data loaded.
+                </div>
+              ) : (
+                <div>
+                  {trendsViewMode === 'matrix' ? (
+                    <div style={{ overflowX: 'auto', borderRadius: '12px', border: '1px solid var(--border-glass)', background: 'rgba(15, 23, 42, 0.2)' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center', fontSize: '0.85rem' }}>
+                        <thead>
+                          <tr style={{ background: 'rgba(30, 27, 75, 0.65)', borderBottom: '2px solid var(--border-glass)' }}>
+                            <th style={{ padding: '0.85rem 1.25rem', fontWeight: 700, position: 'sticky', left: 0, background: 'rgba(30, 27, 75, 0.95)', zIndex: 10, textAlign: 'left', borderRight: '1px solid var(--border-glass)' }}>
+                              Year
+                            </th>
+                            {trendsMatrix.subjects.map(subj => (
+                              <th key={subj} style={{ padding: '0.85rem 1rem', fontWeight: 600, minWidth: '130px', whiteSpace: 'nowrap', borderRight: '1px solid var(--border-glass)' }}>
+                                {subj}
+                              </th>
+                            ))}
+                            <th style={{ padding: '0.85rem 1.25rem', fontWeight: 700, background: 'rgba(30, 27, 75, 0.85)', minWidth: '120px', borderRight: '1px solid var(--border-glass)' }}>
+                              Total Qs
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {trendsMatrix.years.map(yr => {
+                            const total = trendsMatrix.yearStats[yr] ? trendsMatrix.yearStats[yr].total : 0;
+                            return (
+                              <tr key={yr} style={{ borderBottom: '1px solid var(--border-glass)', transition: 'background 0.2s' }}>
+                                <td style={{ padding: '0.85rem 1.25rem', fontWeight: 700, position: 'sticky', left: 0, background: '#111024', zIndex: 10, textAlign: 'left', borderRight: '1px solid var(--border-glass)' }}>
+                                  {yr}
+                                </td>
+                                {trendsMatrix.subjects.map(subj => {
+                                  const cell = trendsMatrix.pivotData[yr][subj];
+                                  const count = cell ? cell.count : 0;
+                                  const pct = cell ? cell.percentage : 0;
+                                  const alpha = count > 0 ? Math.min(0.28, pct / 25) : 0;
+                                  const bgStyle = count > 0 ? { background: `rgba(139, 92, 246, ${alpha})` } : {};
+                                  
+                                  return (
+                                    <td key={subj} style={{ padding: '0.85rem 1rem', borderRight: '1px solid var(--border-glass)', ...bgStyle }}>
+                                      {count > 0 ? (
+                                        <div>
+                                          <button 
+                                            onClick={() => drilldownFromTrends(subj, yr)}
+                                            style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', textDecoration: 'underline', fontWeight: 700, cursor: 'pointer', fontSize: '1.05rem', padding: 0 }}
+                                          >
+                                            {count}
+                                          </button>
+                                          <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', display: 'block' }}>{pct.toFixed(1)}%</span>
+                                        </div>
+                                      ) : (
+                                        <span style={{ color: 'rgba(255,255,255,0.1)' }}>-</span>
+                                      )}
+                                    </td>
+                                  );
+                                })}
+                                <td style={{ padding: '0.85rem 1.25rem', fontWeight: 700, borderRight: '1px solid var(--border-glass)', background: 'rgba(255,255,255,0.01)' }}>
+                                  {total}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div style={{ overflowX: 'auto', borderRadius: '12px', border: '1px solid var(--border-glass)' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+                        <thead>
+                          <tr style={{ background: 'rgba(30, 27, 75, 0.65)', borderBottom: '2px solid var(--border-glass)' }}>
+                            <th style={{ padding: '0.75rem 1.25rem', fontWeight: 600 }}>Year</th>
+                            <th style={{ padding: '0.75rem 1.25rem', fontWeight: 600 }}>Subject</th>
+                            <th style={{ padding: '0.75rem 1.25rem', fontWeight: 600, textAlign: 'center' }}>Number of Questions</th>
+                            <th style={{ padding: '0.75rem 1.25rem', fontWeight: 600, textAlign: 'center' }}>Concentration % in Year</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {trendsMatrix.flatData.map((row, idx) => (
+                            <tr key={idx} style={{ borderBottom: '1px solid var(--border-glass)' }} className="table-row-hover">
+                              <td style={{ padding: '0.75rem 1.25rem', fontWeight: 600 }}>{row.year}</td>
+                              <td style={{ padding: '0.75rem 1.25rem' }}>{row.Subject}</td>
+                              <td style={{ padding: '0.75rem 1.25rem', textAlign: 'center', fontWeight: 600 }}>{row.count}</td>
+                              <td style={{ padding: '0.75rem 1.25rem', textAlign: 'center', color: 'var(--accent-cyan)', fontWeight: 600 }}>
+                                {row.percentage.toFixed(1)}%
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Subject Distribution */}
+            <div className="panel-card">
+              <h3 className="panel-title" style={{ marginBottom: '1.5rem' }}><span>📊</span> Subject Frequency Distribution</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                {stats.subjects && stats.subjects.map(s => {
+                  const percentage = stats.totalQuestions ? ((s.count / stats.totalQuestions) * 100).toFixed(1) : 0;
+                  return (
+                    <div key={s.Subject}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.35rem' }}>
+                        <span style={{ fontWeight: 600 }}>{s.Subject}</span>
+                        <span style={{ color: 'var(--text-secondary)' }}>{s.count} Qs ({percentage}%)</span>
+                      </div>
+                      <div style={{ background: 'rgba(255,255,255,0.03)', height: '10px', borderRadius: '99px', overflow: 'hidden' }}>
+                        <div style={{ background: 'linear-gradient(90deg, var(--accent-violet), var(--accent-cyan))', height: '100%', width: `${percentage}%` }}></div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
