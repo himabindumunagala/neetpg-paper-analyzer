@@ -336,14 +336,14 @@ function App() {
           subjectBreakdown[q.Subject].score += 4;
         } else {
           incorrectCount += 1;
-          subjectBreakdown[q.Subject].score -= 5;
+          subjectBreakdown[q.Subject].score -= 1;
         }
       } else {
         omittedCount += 1;
       }
     });
 
-    const finalMarks = (correctCount * 4) - (incorrectCount * 5);
+    const finalMarks = (correctCount * 4) - (incorrectCount * 1);
     const maxMarks = examQuestions.length * 4;
     const durationSec = 12600 - examTimeRemaining;
 
@@ -380,12 +380,12 @@ function App() {
           subjectBreakdown[q.Subject].correct += 1;
           subjectBreakdown[q.Subject].score += 4;
         } else {
-          subjectBreakdown[q.Subject].score -= 5;
+          subjectBreakdown[q.Subject].score -= 1;
         }
       }
     });
 
-    const finalQuizScore = (correctCount * 4) - (incorrectCount * 5);
+    const finalQuizScore = (correctCount * 4) - (incorrectCount * 1);
     const maxQuizMarks = quizQuestions.length * 4;
 
     saveStudentProgress({
@@ -1418,7 +1418,7 @@ function App() {
                   <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                     <span>⏱️ <strong>Duration:</strong> 3 hours 30 minutes (210 mins) dynamic timer.</span>
                     <span>❓ <strong>Questions:</strong> 200 multiple-choice questions proportionally distributed based on historical subject frequencies.</span>
-                    <span>🟢 <strong>Marking:</strong> +4 marks for correct answers, -5 marks for incorrect answers (-4 potential marks lost + -1 negative marking).</span>
+                    <span>🟢 <strong>Marking:</strong> +4 marks for correct answers, -1 mark negative marking for incorrect answers.</span>
                     <span>🎛️ <strong>Navigation Palette:</strong> Save responses, skip, or mark questions for review using the side grid panel.</span>
                   </div>
                 </div>
@@ -1649,14 +1649,14 @@ function App() {
                       subjectBreakdown[q.Subject].score += 4;
                     } else {
                       incorrectCount += 1;
-                      subjectBreakdown[q.Subject].score -= 5;
+                      subjectBreakdown[q.Subject].score -= 1;
                     }
                   } else {
                     unattemptedCount += 1;
                   }
                 });
 
-                const finalMarks = (correctCount * 4) - (incorrectCount * 5);
+                const finalMarks = (correctCount * 4) - (incorrectCount * 1);
                 const maxMarks = examQuestions.length * 4;
                 const accuracy = (correctCount + incorrectCount) > 0 
                   ? ((correctCount / (correctCount + incorrectCount)) * 100).toFixed(1)
@@ -1689,7 +1689,7 @@ function App() {
                       <div style={{ background: 'rgba(255,255,255,0.015)', border: '1px solid var(--border-glass)', padding: '1.5rem', borderRadius: '16px', textAlign: 'center' }}>
                         <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Incorrect (Negative)</span>
                         <span style={{ display: 'block', fontSize: '2.2rem', fontWeight: 800, color: 'var(--danger-rose)', margin: '0.5rem 0' }}>{incorrectCount}</span>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>-{incorrectCount * 5} Marks</span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>-{incorrectCount} Marks</span>
                       </div>
                     </div>
 
