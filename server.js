@@ -68,7 +68,7 @@ if (process.env.NODE_ENV === 'production') {
   }
 }
 
-const { dbQuery, initDatabase } = require('./config/database');
+const { dbQuery, initDatabase, models } = require('./config/database');
 const { processPDFPipeline, enrichPendingQuestions, logToExecutionFile } = require('./services/processingEngine');
 const { generateExcelWorkbook, generateTrendsExcelWorkbook } = require('./services/excelGenerator');
 const { deleteImage } = require('./services/imageStorage');
@@ -281,6 +281,90 @@ app.get('/api/processingStatus', async (req, res) => {
     res.status(200).json(history);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch ingestion history status.' });
+  }
+});
+
+/**
+ * 3b. GET /api/exam/generate
+ * Generates an actual NEET PG exam simulation with 200 questions (or max available)
+ * preserving historical subject concentration ratios from the database.
+ */
+app.get('/api/exam/generate', async (req, res) => {
+  try {
+    let totalInDb = 0;
+    let subjects = [];
+    const isMongo = !!models.QuestionBank;
+
+    if (isMongo) {
+      totalInDb = await models.QuestionBank.countDocuments({});
+      if (totalInDb === 0) {
+        return res.status(400).json({ error: "The question database is currently empty. Please upload NEET PG papers to generate an exam." });
+      }
+
+      subjects = await models.QuestionBank.aggregate([
+        { $match: { Subject: { $nin: [null, ''] } } },
+        { $group: { _id: '$Subject', count: { $sum: 1 } } },
+        { $project: { _id: 0, Subject: '$_id', count: 1 } },
+        { $sort: { count: -1 } }
+      ]);
+    } else {
+      const totalRow = await dbQuery.get("SELECT COUNT(*) as count FROM QuestionBank");
+      totalInDb = totalRow ? totalRow.count : 0;
+      if (totalInDb === 0) {
+        return res.status(400).json({ error: "The question database is currently empty. Please upload NEET PG papers to generate an exam." });
+      }
+
+      subjects = await dbQuery.all(`
+        SELECT Subject, COUNT(*) as count 
+        FROM QuestionBank 
+        WHERE Subject IS NOT NULL AND Subject != ''
+        GROUP BY Subject
+        ORDER BY count DESC
+      `);
+    }
+
+    const targetSize = Math.min(200, totalInDb);
+    let selectedQuestions = [];
+    let remainingCapacity = targetSize;
+
+    for (let i = 0; i < subjects.length; i++) {
+      const subj = subjects[i];
+      let subjTarget = Math.round((subj.count / totalInDb) * targetSize);
+      
+      if (i === subjects.length - 1) {
+        subjTarget = remainingCapacity;
+      } else {
+        subjTarget = Math.min(subjTarget, remainingCapacity);
+      }
+      
+      if (subjTarget > 0) {
+        let qs = [];
+        if (isMongo) {
+          qs = await models.QuestionBank.aggregate([
+            { $match: { Subject: subj.Subject } },
+            { $sample: { size: subjTarget } }
+          ]);
+        } else {
+          qs = await dbQuery.all(
+            `SELECT * FROM QuestionBank WHERE Subject = ? ORDER BY RANDOM() LIMIT ?`,
+            [subj.Subject, subjTarget]
+          );
+        }
+        selectedQuestions = selectedQuestions.concat(qs);
+        remainingCapacity -= qs.length;
+      }
+    }
+
+    // Shuffle questions
+    selectedQuestions.sort(() => 0.5 - Math.random());
+
+    res.status(200).json({
+      success: true,
+      totalQuestions: selectedQuestions.length,
+      questions: selectedQuestions
+    });
+  } catch (error) {
+    res.status(500).json({ error: `Failed to generate dynamic exam simulator: ${error.message}` });
   }
 });
 
@@ -848,6 +932,87 @@ app.post('/api/auth/google', async (req, res) => {
   } catch (error) {
     logToExecutionFile('ERROR', `Google authentication failure: ${error.message}`);
     res.status(500).json({ error: `Google authentication failed: ${error.message}` });
+  }
+});
+
+/**
+ * 13b. GET /api/student/progress
+ * Retrieves historical progress for a student.
+ */
+app.get('/api/student/progress', async (req, res) => {
+  const email = req.headers['x-user-email'];
+  if (!email) {
+    return res.status(400).json({ error: 'User email is required in headers.' });
+  }
+
+  try {
+    const isMongo = !!models.QuestionBank;
+    let records = [];
+    if (isMongo) {
+      records = await models.StudentProgress.find({ Email: email }).sort({ Completed_Date: 1 });
+    } else {
+      const rows = await dbQuery.all(
+        'SELECT * FROM StudentProgress WHERE Email = ? ORDER BY Completed_Date ASC',
+        [email]
+      );
+      records = rows.map(r => ({
+        Progress_ID: r.Progress_ID,
+        Email: r.Email,
+        Session_Type: r.Session_Type,
+        Score: r.Score,
+        Max_Score: r.Max_Score,
+        Correct_Count: r.Correct_Count,
+        Incorrect_Count: r.Incorrect_Count,
+        Omitted_Count: r.Omitted_Count,
+        Duration_Seconds: r.Duration_Seconds,
+        Subject_Breakdown: JSON.parse(r.Subject_Breakdown),
+        Completed_Date: r.Completed_Date
+      }));
+    }
+    res.status(200).json({ success: true, records });
+  } catch (error) {
+    res.status(500).json({ error: `Failed to fetch student progress: ${error.message}` });
+  }
+});
+
+/**
+ * 13c. POST /api/student/progress
+ * Saves an exam/practice attempt.
+ */
+app.post('/api/student/progress', async (req, res) => {
+  const email = req.headers['x-user-email'];
+  if (!email) {
+    return res.status(400).json({ error: 'User email is required in headers.' });
+  }
+
+  const { sessionType, score, maxScore, correctCount, incorrectCount, omittedCount, durationSeconds, subjectBreakdown } = req.body;
+
+  try {
+    const isMongo = !!models.QuestionBank;
+    if (isMongo) {
+      await models.StudentProgress.create({
+        Email: email,
+        Session_Type: sessionType,
+        Score: score,
+        Max_Score: maxScore,
+        Correct_Count: correctCount,
+        Incorrect_Count: incorrectCount,
+        Omitted_Count: omittedCount,
+        Duration_Seconds: durationSeconds,
+        Subject_Breakdown: subjectBreakdown
+      });
+    } else {
+      const { v4: uuidv4 } = require('uuid');
+      const uuidVal = uuidv4();
+      await dbQuery.run(
+        `INSERT INTO StudentProgress (Progress_ID, Email, Session_Type, Score, Max_Score, Correct_Count, Incorrect_Count, Omitted_Count, Duration_Seconds, Subject_Breakdown, Completed_Date) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+        [uuidVal, email, sessionType, score, maxScore, correctCount, incorrectCount, omittedCount, durationSeconds, JSON.stringify(subjectBreakdown)]
+      );
+    }
+    res.status(200).json({ success: true, message: 'Progress saved successfully.' });
+  } catch (error) {
+    res.status(500).json({ error: `Failed to save progress: ${error.message}` });
   }
 });
 

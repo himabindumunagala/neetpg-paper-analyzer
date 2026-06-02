@@ -50,6 +50,20 @@ function App() {
   const [isQuizCompleted, setIsQuizCompleted] = useState(false);
   const [quizScore, setQuizScore] = useState(0);
 
+  // Exam Simulator States
+  const [isExamActive, setIsExamActive] = useState(false);
+  const [isExamCompleted, setIsExamCompleted] = useState(false);
+  const [examQuestions, setExamQuestions] = useState([]);
+  const [currentExamIdx, setCurrentExamIdx] = useState(0);
+  const [examSelectedAnswers, setExamSelectedAnswers] = useState({});
+  const [examStatus, setExamStatus] = useState({}); // 'unvisited', 'answered', 'marked', 'answered_marked'
+  const [examTimeRemaining, setExamTimeRemaining] = useState(12600); // 3h 30m = 12600s
+  const [examLoading, setExamLoading] = useState(false);
+
+  // Student Progress tracking states
+  const [studentProgressList, setStudentProgressList] = useState([]);
+  const [progressLoading, setProgressLoading] = useState(false);
+ 
   // Settings Configuration States
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [geminiKeyExists, setGeminiKeyExists] = useState(false);
@@ -158,7 +172,10 @@ function App() {
     fetchQuestions();
     fetchSummaryStats();
     fetchSystemLogs();
-  }, [isAuthenticated]);
+    if (userProfile && userProfile.role === 'Student') {
+      fetchStudentProgress();
+    }
+  }, [isAuthenticated, userProfile]);
 
   // Active status polling loop: only triggers when there is a PENDING or PROCESSING file in the queue
   useEffect(() => {
@@ -191,10 +208,14 @@ function App() {
           setStudentTab('dashboard');
         } else if (hash === '#/practice') {
           setStudentTab('practice');
+        } else if (hash === '#/exam') {
+          setStudentTab('exam');
         } else if (hash === '#/question-bank') {
           setStudentTab('questions');
         } else if (hash === '#/trends') {
           setStudentTab('trends');
+        } else if (hash === '#/progress') {
+          setStudentTab('progress');
         } else {
           window.location.hash = '#/dashboard';
           setStudentTab('dashboard');
@@ -245,7 +266,201 @@ function App() {
     }
   }, [logs]);
 
+  const generateExam = async () => {
+    setExamLoading(true);
+    try {
+      const response = await fetch('/api/exam/generate');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.questions && data.questions.length > 0) {
+          const processedQuestions = data.questions.map(q => {
+            const keys = [];
+            if (q.Option_A !== undefined && q.Option_A !== '') keys.push('A');
+            if (q.Option_B !== undefined && q.Option_B !== '') keys.push('B');
+            if (q.Option_C !== undefined && q.Option_C !== '') keys.push('C');
+            if (q.Option_D !== undefined && q.Option_D !== '') keys.push('D');
+            const shuffledKeys = keys.sort(() => 0.5 - Math.random());
+            return { ...q, _shuffledOptionKeys: shuffledKeys };
+          });
+          setExamQuestions(processedQuestions);
+          setCurrentExamIdx(0);
+          setExamSelectedAnswers({});
+          
+          const initialStatus = {};
+          processedQuestions.forEach(q => {
+            initialStatus[q.Question_ID] = 'unvisited';
+          });
+          setExamStatus(initialStatus);
+          
+          setExamTimeRemaining(12600); // 3 hours 30 mins
+          setIsExamActive(true);
+          setIsExamCompleted(false);
+        } else {
+          alert('Failed to generate exam questions. Database might be empty.');
+        }
+      } else {
+        const err = await response.json();
+        alert(err.error || 'Failed to generate exam.');
+      }
+    } catch (err) {
+      console.error('Failed to generate exam:', err);
+      alert('Network error connecting to exam generator.');
+    } finally {
+      setExamLoading(false);
+    }
+  };
 
+  const submitExam = () => {
+    setIsExamActive(false);
+    setIsExamCompleted(true);
+
+    let correctCount = 0;
+    let incorrectCount = 0;
+    let omittedCount = 0;
+    const subjectBreakdown = {};
+
+    examQuestions.forEach(q => {
+      const selected = examSelectedAnswers[q.Question_ID];
+      const status = examStatus[q.Question_ID];
+      const isEvaluated = selected !== undefined && (status === 'answered' || status === 'answered_marked_for_review');
+      
+      if (!subjectBreakdown[q.Subject]) {
+        subjectBreakdown[q.Subject] = { total: 0, correct: 0, score: 0 };
+      }
+      subjectBreakdown[q.Subject].total += 1;
+
+      if (isEvaluated) {
+        if (selected === q.Correct_Answer) {
+          correctCount += 1;
+          subjectBreakdown[q.Subject].correct += 1;
+          subjectBreakdown[q.Subject].score += 4;
+        } else {
+          incorrectCount += 1;
+          subjectBreakdown[q.Subject].score -= 5;
+        }
+      } else {
+        omittedCount += 1;
+      }
+    });
+
+    const finalMarks = (correctCount * 4) - (incorrectCount * 5);
+    const maxMarks = examQuestions.length * 4;
+    const durationSec = 12600 - examTimeRemaining;
+
+    saveStudentProgress({
+      sessionType: 'exam',
+      score: finalMarks,
+      maxScore: maxMarks,
+      correctCount,
+      incorrectCount,
+      omittedCount,
+      durationSeconds: durationSec,
+      subjectBreakdown
+    });
+  };
+
+  const submitQuiz = () => {
+    setIsQuizCompleted(true);
+    setIsQuizActive(false);
+
+    let correctCount = quizScore;
+    let incorrectCount = Object.keys(quizSelectedAnswers).length - quizScore;
+    let omittedCount = quizQuestions.length - Object.keys(quizSelectedAnswers).length;
+    
+    const subjectBreakdown = {};
+    quizQuestions.forEach((q, idx) => {
+      const selected = quizSelectedAnswers[idx];
+      if (!subjectBreakdown[q.Subject]) {
+        subjectBreakdown[q.Subject] = { total: 0, correct: 0, score: 0 };
+      }
+      subjectBreakdown[q.Subject].total += 1;
+      
+      if (selected !== undefined) {
+        if (selected === q.Correct_Answer) {
+          subjectBreakdown[q.Subject].correct += 1;
+          subjectBreakdown[q.Subject].score += 4;
+        } else {
+          subjectBreakdown[q.Subject].score -= 5;
+        }
+      }
+    });
+
+    const finalQuizScore = (correctCount * 4) - (incorrectCount * 5);
+    const maxQuizMarks = quizQuestions.length * 4;
+
+    saveStudentProgress({
+      sessionType: 'practice',
+      score: finalQuizScore,
+      maxScore: maxQuizMarks,
+      correctCount,
+      incorrectCount,
+      omittedCount,
+      durationSeconds: 0,
+      subjectBreakdown
+    });
+  };
+
+  useEffect(() => {
+    if (!isExamActive) return;
+    const timer = setInterval(() => {
+      setExamTimeRemaining(time => {
+        if (time <= 1) {
+          clearInterval(timer);
+          submitExam();
+          return 0;
+        }
+        return time - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isExamActive]);
+
+  const handleExamOptionClick = (option) => {
+    const q = examQuestions[currentExamIdx];
+    const updatedAnswers = { ...examSelectedAnswers, [q.Question_ID]: option };
+    setExamSelectedAnswers(updatedAnswers);
+    
+    const currentStatus = examStatus[q.Question_ID];
+    const newStatus = (currentStatus === 'marked_for_review' || currentStatus === 'answered_marked_for_review')
+      ? 'answered_marked_for_review'
+      : 'answered';
+    setExamStatus({ ...examStatus, [q.Question_ID]: newStatus });
+  };
+
+  const handleClearExamResponse = () => {
+    const q = examQuestions[currentExamIdx];
+    const updatedAnswers = { ...examSelectedAnswers };
+    delete updatedAnswers[q.Question_ID];
+    setExamSelectedAnswers(updatedAnswers);
+    
+    const currentStatus = examStatus[q.Question_ID];
+    const newStatus = (currentStatus === 'answered_marked_for_review' || currentStatus === 'marked_for_review')
+      ? 'marked_for_review'
+      : 'unvisited';
+    setExamStatus({ ...examStatus, [q.Question_ID]: newStatus });
+  };
+
+  const handleMarkForReview = () => {
+    const q = examQuestions[currentExamIdx];
+    const hasAnswer = examSelectedAnswers[q.Question_ID] !== undefined;
+    const newStatus = hasAnswer ? 'answered_marked_for_review' : 'marked_for_review';
+    setExamStatus({ ...examStatus, [q.Question_ID]: newStatus });
+    
+    if (currentExamIdx < examQuestions.length - 1) {
+      setCurrentExamIdx(idx => idx + 1);
+    }
+  };
+
+  const handleSaveAndNext = () => {
+    const q = examQuestions[currentExamIdx];
+    const hasAnswer = examSelectedAnswers[q.Question_ID] !== undefined;
+    const newStatus = hasAnswer ? 'answered' : 'unanswered';
+    setExamStatus({ ...examStatus, [q.Question_ID]: newStatus });
+    
+    if (currentExamIdx < examQuestions.length - 1) {
+      setCurrentExamIdx(idx => idx + 1);
+    }
+  };
 
   const handleSavePasscode = async (e) => {
     e.preventDefault();
@@ -318,6 +533,43 @@ function App() {
       }
     } catch (err) {
       console.error('Failed to load summary stats:', err);
+    }
+  };
+
+  const fetchStudentProgress = async () => {
+    if (!userProfile) return;
+    setProgressLoading(true);
+    try {
+      const response = await fetch('/api/student/progress', {
+        headers: {
+          'x-user-email': userProfile.email
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setStudentProgressList(data.records || []);
+      }
+    } catch (err) {
+      console.error('Failed to load student progress:', err);
+    } finally {
+      setProgressLoading(false);
+    }
+  };
+
+  const saveStudentProgress = async (progressData) => {
+    if (!userProfile) return;
+    try {
+      await fetch('/api/student/progress', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-email': userProfile.email
+        },
+        body: JSON.stringify(progressData)
+      });
+      fetchStudentProgress();
+    } catch (err) {
+      console.error('Failed to save student progress:', err);
     }
   };
 
@@ -775,6 +1027,8 @@ function App() {
     }
   };
 
+
+
   if (userProfile && userProfile.role === 'Student') {
     return (
       <div className="app-container">
@@ -806,6 +1060,13 @@ function App() {
               Interactive Quiz
             </button>
             <button 
+              className={`nav-tab ${studentTab === 'exam' ? 'active' : ''}`}
+              onClick={() => window.location.hash = '#/exam'}
+            >
+              Exam Simulator
+            </button>
+
+            <button 
               className={`nav-tab ${studentTab === 'questions' ? 'active' : ''}`}
               onClick={() => window.location.hash = '#/question-bank'}
             >
@@ -816,6 +1077,12 @@ function App() {
               onClick={() => window.location.hash = '#/trends'}
             >
               Weightage Trends
+            </button>
+            <button 
+              className={`nav-tab ${studentTab === 'progress' ? 'active' : ''}`}
+              onClick={() => window.location.hash = '#/progress'}
+            >
+              Progress Tracker
             </button>
             
             {userProfile && (
@@ -1088,7 +1355,7 @@ function App() {
                             Next Question →
                           </button>
                         ) : (
-                          <button className="btn btn-primary" style={{ padding: '0.5rem 1.5rem' }} onClick={() => { setIsQuizCompleted(true); setIsQuizActive(false); }}>
+                          <button className="btn btn-primary" style={{ padding: '0.5rem 1.5rem' }} onClick={submitQuiz}>
                             Finish Quiz 🏁
                           </button>
                         )}
@@ -1125,6 +1392,343 @@ function App() {
                   </button>
                 </div>
               </div>
+            )}
+          </div>
+        )}
+
+        {studentTab === 'exam' && (
+          <div className="panel-card" style={{ minHeight: '500px', display: 'flex', flexDirection: 'column' }}>
+            {examLoading ? (
+              <div style={{ textAlign: 'center', padding: '5rem', color: 'var(--text-muted)' }}>
+                <span className="pulse-glow" style={{ fontSize: '1.25rem', color: 'var(--accent-cyan)' }}>
+                  ⏳ Generating standard NEET PG simulated exam... proportional allocation active
+                </span>
+              </div>
+            ) : !isExamActive && !isExamCompleted ? (
+              /* Exam Intro / Launch Page */
+              <div style={{ maxWidth: '650px', margin: '2rem auto', display: 'flex', flexDirection: 'column', gap: '1.5rem', textAlign: 'center' }}>
+                <span style={{ fontSize: '4rem' }}>📝</span>
+                <h3 style={{ fontSize: '1.8rem', color: '#fff', fontWeight: 800 }}>NEET PG Exam Simulator</h3>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: '1.6' }}>
+                  This panel runs a high-fidelity simulation of the official NEET PG computer-based exam.
+                </p>
+
+                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-glass)', borderRadius: '14px', padding: '1.5rem', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <h4 style={{ color: 'var(--accent-cyan)', fontWeight: 700, fontSize: '1.05rem', marginBottom: '0.25rem' }}>Exam Rules & Parameters:</h4>
+                  <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <span>⏱️ <strong>Duration:</strong> 3 hours 30 minutes (210 mins) dynamic timer.</span>
+                    <span>❓ <strong>Questions:</strong> 200 multiple-choice questions proportionally distributed based on historical subject frequencies.</span>
+                    <span>🟢 <strong>Marking:</strong> +4 marks for correct answers, -5 marks for incorrect answers (-4 potential marks lost + -1 negative marking).</span>
+                    <span>🎛️ <strong>Navigation Palette:</strong> Save responses, skip, or mark questions for review using the side grid panel.</span>
+                  </div>
+                </div>
+
+                <button className="btn btn-cyan" style={{ padding: '0.85rem', fontWeight: 700, fontSize: '1rem', marginTop: '1rem' }} onClick={generateExam}>
+                  🚀 Start NEET PG Exam Simulation
+                </button>
+              </div>
+            ) : isExamActive ? (
+              /* Active Simulated Exam Panel */
+              (() => {
+                const q = examQuestions[currentExamIdx];
+                if (!q) return null;
+                const selectedAns = examSelectedAnswers[q.Question_ID];
+                const isSelected = selectedAns !== undefined;
+                
+                const hours = Math.floor(examTimeRemaining / 3600);
+                const minutes = Math.floor((examTimeRemaining % 3600) / 60);
+                const seconds = examTimeRemaining % 60;
+                
+                const statuses = Object.values(examStatus);
+                const countAnswered = statuses.filter(s => s === 'answered').length;
+                const countUnanswered = statuses.filter(s => s === 'unanswered').length;
+                const countMarked = statuses.filter(s => s === 'marked_for_review').length;
+                const countAnsweredMarked = statuses.filter(s => s === 'answered_marked_for_review').length;
+                const countUnvisited = examQuestions.length - countAnswered - countUnanswered - countMarked - countAnsweredMarked;
+
+                return (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '2rem', flex: 1 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-glass)', paddingBottom: '1rem' }}>
+                        <div>
+                          <span className="badge subject" style={{ padding: '0.4rem 0.85rem' }}>{q.Subject}</span>
+                          <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginLeft: '1rem' }}>recall reference year: {q.Previous_Year}</span>
+                        </div>
+                        <div style={{ fontSize: '1.25rem', fontFamily: 'Consolas, monospace', color: examTimeRemaining < 600 ? 'var(--danger-rose)' : 'var(--accent-cyan)', fontWeight: 700 }}>
+                          ⏱️ {hours.toString().padStart(2, '0')}:{minutes.toString().padStart(2, '0')}:{seconds.toString().padStart(2, '0')}
+                        </div>
+                      </div>
+
+                      <div>
+                        <h4 style={{ color: '#fff', fontSize: '1.1rem', marginBottom: '0.5rem' }}>Question {currentExamIdx + 1}:</h4>
+                        <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-glass)', padding: '1.5rem', borderRadius: '12px', minHeight: '120px' }}>
+                          <p style={{ fontWeight: 500, fontSize: '1.05rem', lineHeight: '1.6' }}>{q.Question_Text}</p>
+                        </div>
+                      </div>
+
+                      {(q.Image_Present === 1 || q.Image_Present === true) && q.Embedded_Image && (
+                        <div style={{ display: 'flex', justifyContent: 'center', background: '#fff', padding: '12px', borderRadius: '12px', border: '1px solid var(--border-glass)' }}>
+                          <img src={q.Embedded_Image} alt="Exam Diagram" style={{ maxHeight: '240px', objectFit: 'contain', cursor: 'zoom-in' }} onClick={() => setZoomedImage(q.Embedded_Image)} />
+                        </div>
+                      )}
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                        {(q._shuffledOptionKeys || ['A', 'B', 'C', 'D']).map(opt => {
+                          const optText = q[`Option_${opt}`];
+                          if (!optText) return null;
+                          const activeSelect = selectedAns === opt;
+                          return (
+                            <div 
+                              key={opt}
+                              onClick={() => handleExamOptionClick(opt)}
+                              style={{ 
+                                border: activeSelect ? '2px solid var(--accent-cyan)' : '1px solid var(--border-glass)',
+                                background: activeSelect ? 'rgba(6, 182, 212, 0.08)' : 'rgba(255,255,255,0.015)',
+                                padding: '1.1rem 1.25rem',
+                                borderRadius: '12px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '1rem',
+                                transition: 'all 0.2s'
+                              }}
+                              className="table-row-hover"
+                            >
+                              <span style={{
+                                width: '26px',
+                                height: '26px',
+                                borderRadius: '50%',
+                                background: activeSelect ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.1)',
+                                color: activeSelect ? '#000' : '#fff',
+                                display: 'flex',
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                fontWeight: 700,
+                                fontSize: '0.8rem'
+                              }}>{opt}</span>
+                              <div style={{ flex: 1 }}>{renderOptionText(optText)}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', marginTop: '1rem', borderTop: '1px solid var(--border-glass)', paddingTop: '1.5rem' }}>
+                        <div style={{ display: 'flex', gap: '0.75rem' }}>
+                          <button className="btn btn-secondary" style={{ padding: '0.65rem 1.25rem', color: 'var(--text-secondary)' }} onClick={handleClearExamResponse}>
+                            Clear Response
+                          </button>
+                          <button className="btn btn-secondary" style={{ padding: '0.65rem 1.25rem', background: 'rgba(139, 92, 246, 0.1)', color: '#a78bfa' }} onClick={handleMarkForReview}>
+                            Mark for Review &amp; Next
+                          </button>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '0.75rem' }}>
+                          <button className="btn btn-cyan" style={{ padding: '0.65rem 1.5rem', fontWeight: 600 }} onClick={handleSaveAndNext}>
+                            Save &amp; Next
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ borderLeft: '1px solid var(--border-glass)', paddingLeft: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                      <div>
+                        <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#fff', marginBottom: '0.75rem' }}>Question Palette</h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.4rem', maxHeight: '280px', overflowY: 'auto', paddingRight: '0.25rem' }}>
+                          {examQuestions.map((eq, index) => {
+                            const status = examStatus[eq.Question_ID] || 'unvisited';
+                            let bgColor = 'rgba(255,255,255,0.05)';
+                            let textColor = 'var(--text-secondary)';
+                            let border = '1px solid var(--border-glass)';
+                            
+                            if (status === 'answered') {
+                              bgColor = 'var(--success-emerald)';
+                              textColor = '#fff';
+                            } else if (status === 'unanswered') {
+                              bgColor = 'var(--danger-rose)';
+                              textColor = '#fff';
+                            } else if (status === 'marked_for_review') {
+                              bgColor = 'var(--accent-violet)';
+                              textColor = '#fff';
+                            } else if (status === 'answered_marked_for_review') {
+                              bgColor = 'var(--accent-violet)';
+                              textColor = '#fff';
+                              border = '2px solid var(--success-emerald)';
+                            }
+                            
+                            const isCurrent = currentExamIdx === index;
+                            if (isCurrent) {
+                              border = '2px solid var(--accent-cyan)';
+                            }
+
+                            return (
+                              <button
+                                key={eq.Question_ID}
+                                onClick={() => {
+                                  const currentQ = examQuestions[currentExamIdx];
+                                  if (examStatus[currentQ.Question_ID] === 'unvisited') {
+                                    setExamStatus({ ...examStatus, [currentQ.Question_ID]: 'unanswered' });
+                                  }
+                                  setCurrentExamIdx(index);
+                                }}
+                                style={{
+                                  background: bgColor,
+                                  color: textColor,
+                                  border: border,
+                                  borderRadius: '6px',
+                                  padding: '0.35rem 0',
+                                  fontSize: '0.75rem',
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                  textAlign: 'center'
+                                }}
+                              >
+                                {index + 1}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.75rem', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-glass)', padding: '1rem', borderRadius: '10px' }}>
+                        <div style={{ display: 'flex', justifyItems: 'center', gap: '0.5rem' }}>
+                          <span style={{ width: '12px', height: '12px', background: 'var(--success-emerald)', borderRadius: '2px', display: 'inline-block' }}></span>
+                          <span>Answered ({countAnswered})</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyItems: 'center', gap: '0.5rem' }}>
+                          <span style={{ width: '12px', height: '12px', background: 'var(--danger-rose)', borderRadius: '2px', display: 'inline-block' }}></span>
+                          <span>Unanswered ({countUnanswered})</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyItems: 'center', gap: '0.5rem' }}>
+                          <span style={{ width: '12px', height: '12px', background: 'var(--accent-violet)', borderRadius: '2px', display: 'inline-block' }}></span>
+                          <span>Marked for Review ({countMarked})</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyItems: 'center', gap: '0.5rem' }}>
+                          <span style={{ width: '12px', height: '12px', background: 'var(--accent-violet)', border: '1.5px solid var(--success-emerald)', borderRadius: '2px', display: 'inline-block' }}></span>
+                          <span>Ans &amp; Marked for Review ({countAnsweredMarked})</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyItems: 'center', gap: '0.5rem' }}>
+                          <span style={{ width: '12px', height: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-glass)', borderRadius: '2px', display: 'inline-block' }}></span>
+                          <span>Not Visited ({countUnvisited})</span>
+                        </div>
+                      </div>
+
+                      <button className="btn btn-primary" style={{ width: '100%', padding: '0.75rem', fontWeight: 700, marginTop: 'auto' }} onClick={() => {
+                        if (window.confirm("Are you sure you want to submit your final exam answers?")) {
+                          submitExam();
+                        }
+                      }}>
+                        Submit Exam 🏁
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()
+            ) : (
+              /* Exam Results Summary Screen */
+              (() => {
+                let correctCount = 0;
+                let incorrectCount = 0;
+                let unattemptedCount = 0;
+                const subjectBreakdown = {};
+
+                examQuestions.forEach(q => {
+                  const selected = examSelectedAnswers[q.Question_ID];
+                  const status = examStatus[q.Question_ID];
+                  
+                  const isEvaluated = selected !== undefined && (status === 'answered' || status === 'answered_marked_for_review');
+                  
+                  if (!subjectBreakdown[q.Subject]) {
+                    subjectBreakdown[q.Subject] = { total: 0, correct: 0, score: 0 };
+                  }
+                  subjectBreakdown[q.Subject].total += 1;
+
+                  if (isEvaluated) {
+                    if (selected === q.Correct_Answer) {
+                      correctCount += 1;
+                      subjectBreakdown[q.Subject].correct += 1;
+                      subjectBreakdown[q.Subject].score += 4;
+                    } else {
+                      incorrectCount += 1;
+                      subjectBreakdown[q.Subject].score -= 5;
+                    }
+                  } else {
+                    unattemptedCount += 1;
+                  }
+                });
+
+                const finalMarks = (correctCount * 4) - (incorrectCount * 5);
+                const maxMarks = examQuestions.length * 4;
+                const accuracy = (correctCount + incorrectCount) > 0 
+                  ? ((correctCount / (correctCount + incorrectCount)) * 100).toFixed(1)
+                  : '0.0';
+
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                    <div style={{ textAlign: 'center', borderBottom: '1px solid var(--border-glass)', paddingBottom: '1.5rem' }}>
+                      <span style={{ fontSize: '4.5rem' }}>🎓</span>
+                      <h3 style={{ fontSize: '2rem', color: '#fff', fontWeight: 800, marginTop: '0.5rem' }}>NEET PG Exam Scorecard</h3>
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>Official Simulation Recall Evaluation Report</p>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1.25rem' }}>
+                      <div style={{ background: 'rgba(255,255,255,0.015)', border: '1px solid var(--border-glass)', padding: '1.5rem', borderRadius: '16px', textAlign: 'center' }}>
+                        <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Score Obtained</span>
+                        <span style={{ display: 'block', fontSize: '2.2rem', fontWeight: 800, color: 'var(--accent-cyan)', margin: '0.5rem 0' }}>{finalMarks}</span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Out of {maxMarks} Marks</span>
+                      </div>
+                      <div style={{ background: 'rgba(255,255,255,0.015)', border: '1px solid var(--border-glass)', padding: '1.5rem', borderRadius: '16px', textAlign: 'center' }}>
+                        <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Accuracy Rate</span>
+                        <span style={{ display: 'block', fontSize: '2.2rem', fontWeight: 800, color: 'var(--accent-violet)', margin: '0.5rem 0' }}>{accuracy}%</span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>On evaluated questions</span>
+                      </div>
+                      <div style={{ background: 'rgba(255,255,255,0.015)', border: '1px solid var(--border-glass)', padding: '1.5rem', borderRadius: '16px', textAlign: 'center' }}>
+                        <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Correct Answers</span>
+                        <span style={{ display: 'block', fontSize: '2.2rem', fontWeight: 800, color: 'var(--success-emerald)', margin: '0.5rem 0' }}>{correctCount}</span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>+{correctCount * 4} Marks</span>
+                      </div>
+                      <div style={{ background: 'rgba(255,255,255,0.015)', border: '1px solid var(--border-glass)', padding: '1.5rem', borderRadius: '16px', textAlign: 'center' }}>
+                        <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Incorrect (Negative)</span>
+                        <span style={{ display: 'block', fontSize: '2.2rem', fontWeight: 800, color: 'var(--danger-rose)', margin: '0.5rem 0' }}>{incorrectCount}</span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>-{incorrectCount * 5} Marks</span>
+                      </div>
+                    </div>
+
+                    <div className="panel-card">
+                      <h4 style={{ color: '#fff', fontSize: '1.05rem', marginBottom: '1rem' }}>Subject-wise Performance Breakdown:</h4>
+                      <div style={{ overflowX: 'auto', borderRadius: '10px', border: '1px solid var(--border-glass)' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', textAlign: 'left' }}>
+                          <thead>
+                            <tr style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid var(--border-glass)' }}>
+                              <th style={{ padding: '0.75rem 1rem' }}>Subject</th>
+                              <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Questions</th>
+                              <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Correct</th>
+                              <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Subject Marks</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {Object.entries(subjectBreakdown).map(([subjName, data]) => (
+                              <tr key={subjName} style={{ borderBottom: '1px solid var(--border-glass)' }}>
+                                <td style={{ padding: '0.75rem 1rem', fontWeight: 600 }}>{subjName}</td>
+                                <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>{data.total}</td>
+                                <td style={{ padding: '0.75rem 1rem', textAlign: 'center', color: 'var(--success-emerald)', fontWeight: 600 }}>{data.correct}</td>
+                                <td style={{ padding: '0.75rem 1rem', textAlign: 'center', color: data.score >= 0 ? 'var(--accent-cyan)' : 'var(--danger-rose)', fontWeight: 700 }}>
+                                  {data.score}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+                      <button className="btn btn-cyan" style={{ padding: '0.75rem 1.5rem', fontWeight: 600 }} onClick={() => { setIsExamCompleted(false); setIsExamActive(false); }}>
+                        Start New Exam Simulation
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()
             )}
           </div>
         )}
@@ -1459,6 +2063,344 @@ function App() {
                 })}
               </div>
             </div>
+          </div>
+        )}
+
+        {studentTab === 'progress' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+            <div className="panel-card">
+              <h3 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span>📊</span> Progress Analytics &amp; Strength Profile
+              </h3>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                Track your historical simulated scores, analyze subject accuracies, and view focus areas.
+              </p>
+            </div>
+
+            {studentProgressList.length === 0 ? (
+              <div className="panel-card" style={{ padding: '4rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                <span style={{ fontSize: '3rem', display: 'block', marginBottom: '1rem' }}>📈</span>
+                <h4>No attempts recorded yet.</h4>
+                <p style={{ fontSize: '0.85rem', marginTop: '0.5rem' }}>
+                  Complete simulated exams or practice quizzes to visualize your learning trajectory.
+                </p>
+              </div>
+            ) : (
+              (() => {
+                const totalAttempts = studentProgressList.length;
+                const examAttempts = studentProgressList.filter(p => p.Session_Type === 'exam');
+                const practiceAttempts = studentProgressList.filter(p => p.Session_Type === 'practice');
+                
+                let sumPercentage = 0;
+                let totalCorrect = 0;
+                let totalIncorrect = 0;
+                let totalOmitted = 0;
+                let totalDuration = 0;
+                const subjectStats = {};
+
+                studentProgressList.forEach(p => {
+                  sumPercentage += (p.Score / p.Max_Score) * 100;
+                  totalCorrect += p.Correct_Count;
+                  totalIncorrect += p.Incorrect_Count;
+                  totalOmitted += p.Omitted_Count;
+                  totalDuration += p.Duration_Seconds || 0;
+
+                  if (p.Subject_Breakdown) {
+                    Object.entries(p.Subject_Breakdown).forEach(([subj, data]) => {
+                      if (!subjectStats[subj]) {
+                        subjectStats[subj] = { correct: 0, total: 0 };
+                      }
+                      subjectStats[subj].correct += data.correct || 0;
+                      subjectStats[subj].total += data.total || 0;
+                    });
+                  }
+                });
+
+                const averageAccuracy = (sumPercentage / totalAttempts).toFixed(1);
+                const hrs = Math.floor(totalDuration / 3600);
+                const mins = Math.floor((totalDuration % 3600) / 60);
+
+                const mastered = [];
+                const intermediate = [];
+                const focusRequired = [];
+
+                Object.entries(subjectStats).forEach(([subj, data]) => {
+                  const accuracy = data.total > 0 ? (data.correct / data.total) * 100 : 0;
+                  const item = { subject: subj, accuracy: accuracy.toFixed(1), correct: data.correct, total: data.total };
+                  if (accuracy >= 80) {
+                    mastered.push(item);
+                  } else if (accuracy >= 50) {
+                    intermediate.push(item);
+                  } else {
+                    focusRequired.push(item);
+                  }
+                });
+
+                mastered.sort((a, b) => b.accuracy - a.accuracy);
+                intermediate.sort((a, b) => b.accuracy - a.accuracy);
+                focusRequired.sort((a, b) => a.accuracy - b.accuracy);
+
+                const width = 800;
+                const height = 200;
+                const paddingLeft = 40;
+                const paddingRight = 20;
+                const paddingTop = 20;
+                const paddingBottom = 30;
+                const chartWidth = width - paddingLeft - paddingRight;
+                const chartHeight = height - paddingTop - paddingBottom;
+
+                const points = studentProgressList.map((p, idx) => {
+                  const x = paddingLeft + (totalAttempts === 1 ? chartWidth / 2 : (idx / (totalAttempts - 1)) * chartWidth);
+                  const scorePct = (p.Score / p.Max_Score) * 100;
+                  const clampedPct = Math.max(0, scorePct);
+                  const y = paddingTop + chartHeight - (clampedPct / 100) * chartHeight;
+                  return { x, y, scorePct, date: new Date(p.Completed_Date).toLocaleDateString(), type: p.Session_Type };
+                });
+
+                const polylinePoints = points.map(pt => `${pt.x},${pt.y}`).join(' ');
+
+                return (
+                  <>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.25rem' }}>
+                      <div style={{ background: 'rgba(255,255,255,0.015)', border: '1px solid var(--border-glass)', padding: '1.5rem', borderRadius: '16px', textAlign: 'center' }}>
+                        <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Mock Sessions Completed</span>
+                        <span style={{ display: 'block', fontSize: '2.2rem', fontWeight: 800, color: 'var(--accent-cyan)', margin: '0.5rem 0' }}>{totalAttempts}</span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{examAttempts.length} Exams, {practiceAttempts.length} Quizzes</span>
+                      </div>
+                      <div style={{ background: 'rgba(255,255,255,0.015)', border: '1px solid var(--border-glass)', padding: '1.5rem', borderRadius: '16px', textAlign: 'center' }}>
+                        <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Avg Accuracy Rate</span>
+                        <span style={{ display: 'block', fontSize: '2.2rem', fontWeight: 800, color: 'var(--accent-violet)', margin: '0.5rem 0' }}>{averageAccuracy}%</span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Across all attempts</span>
+                      </div>
+                      <div style={{ background: 'rgba(255,255,255,0.015)', border: '1px solid var(--border-glass)', padding: '1.5rem', borderRadius: '16px', textAlign: 'center' }}>
+                        <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Total Questions Solved</span>
+                        <span style={{ display: 'block', fontSize: '2.2rem', fontWeight: 800, color: 'var(--success-emerald)', margin: '0.5rem 0' }}>{totalCorrect + totalIncorrect}</span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{totalCorrect} Correct, {totalIncorrect} Incorrect</span>
+                      </div>
+                      <div style={{ background: 'rgba(255,255,255,0.015)', border: '1px solid var(--border-glass)', padding: '1.5rem', borderRadius: '16px', textAlign: 'center' }}>
+                        <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Time Logged on Exams</span>
+                        <span style={{ display: 'block', fontSize: '2.2rem', fontWeight: 800, color: 'var(--warning-amber)', margin: '0.5rem 0' }}>{hrs}h {mins}m</span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Standard simulation runs</span>
+                      </div>
+                    </div>
+
+                    <div className="panel-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      <h4 style={{ color: '#fff', fontSize: '1.05rem', margin: 0 }}>Score Percentage Timeline Trajectory</h4>
+                      <div style={{ position: 'relative', width: '100%', overflowX: 'auto', background: 'rgba(0,0,0,0.15)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--border-glass)' }}>
+                        <svg width={width} height={height} style={{ overflow: 'visible' }}>
+                          {[0, 25, 50, 75, 100].map(yVal => {
+                            const gridY = paddingTop + chartHeight - (yVal / 100) * chartHeight;
+                            return (
+                              <g key={yVal}>
+                                <line x1={paddingLeft} y1={gridY} x2={width - paddingRight} y2={gridY} stroke="rgba(255,255,255,0.05)" strokeDasharray="4 4" />
+                                <text x={paddingLeft - 10} y={gridY + 4} fill="var(--text-muted)" fontSize="0.75rem" textAnchor="end">{yVal}%</text>
+                              </g>
+                            );
+                          })}
+
+                          <polyline
+                            fill="none"
+                            stroke="url(#chart-gradient)"
+                            strokeWidth="3"
+                            points={polylinePoints}
+                          />
+
+                          {points.map((pt, idx) => (
+                            <g key={idx}>
+                              <circle
+                                cx={pt.x}
+                                cy={pt.y}
+                                r="5"
+                                fill={pt.type === 'exam' ? 'var(--accent-cyan)' : 'var(--accent-violet)'}
+                                stroke="#111024"
+                                strokeWidth="2"
+                                style={{ cursor: 'pointer' }}
+                              />
+                              <text
+                                x={pt.x}
+                                y={pt.y - 12}
+                                fill="#fff"
+                                fontSize="0.7rem"
+                                fontWeight="bold"
+                                textAnchor="middle"
+                              >
+                                {pt.scorePct.toFixed(0)}%
+                              </text>
+                              <text
+                                x={pt.x}
+                                y={paddingTop + chartHeight + 18}
+                                fill="var(--text-muted)"
+                                fontSize="0.65rem"
+                                textAnchor="middle"
+                              >
+                                {pt.date}
+                              </text>
+                            </g>
+                          ))}
+
+                          <defs>
+                            <linearGradient id="chart-gradient" x1="0" y1="0" x2="1" y2="0">
+                              <stop offset="0%" stopColor="var(--accent-violet)" />
+                              <stop offset="100%" stopColor="var(--accent-cyan)" />
+                            </linearGradient>
+                          </defs>
+                        </svg>
+                      </div>
+                      <div style={{ display: 'flex', gap: '1.5rem', justifyContent: 'center', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-cyan)', display: 'inline-block' }}></span> Simulated Exams
+                        </span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-violet)', display: 'inline-block' }}></span> Practice Quizzes
+                        </span>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem' }}>
+                      <div className="panel-card" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                        <h4 style={{ color: '#fff', fontSize: '1.05rem', margin: 0 }}>Subject Breakdown &amp; Mastery Levels</h4>
+                        
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                          <div>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--success-emerald)', fontWeight: 700, display: 'block', marginBottom: '0.5rem' }}>
+                              🟢 MASTERED SUBJECTS (&gt;= 80%)
+                            </span>
+                            {mastered.length === 0 ? (
+                              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>None yet. Keep practicing!</span>
+                            ) : (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                {mastered.map(item => (
+                                  <span key={item.subject} className="badge subject" style={{ background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.25)', color: 'var(--success-emerald)', fontSize: '0.75rem', padding: '0.35rem 0.65rem' }}>
+                                    {item.subject} ({item.accuracy}%)
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          <div>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--warning-amber)', fontWeight: 700, display: 'block', marginBottom: '0.5rem' }}>
+                              🟡 INTERMEDIATE SUBJECTS (50% - 79%)
+                            </span>
+                            {intermediate.length === 0 ? (
+                              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>None yet.</span>
+                            ) : (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                {intermediate.map(item => (
+                                  <span key={item.subject} className="badge subject" style={{ background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.25)', color: 'var(--warning-amber)', fontSize: '0.75rem', padding: '0.35rem 0.65rem' }}>
+                                    {item.subject} ({item.accuracy}%)
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          <div>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--danger-rose)', fontWeight: 700, display: 'block', marginBottom: '0.5rem' }}>
+                              🔴 FOCUS AREAS &amp; WEAKNESSES (&lt; 50%)
+                            </span>
+                            {focusRequired.length === 0 ? (
+                              <span style={{ fontSize: '0.8rem', color: 'var(--success-emerald)', fontStyle: 'italic', fontWeight: 600 }}>All subjects are above 50%! Excellent work.</span>
+                            ) : (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                {focusRequired.map(item => (
+                                  <span key={item.subject} className="badge subject" style={{ background: 'rgba(244, 63, 94, 0.12)', border: '1px solid rgba(244, 63, 94, 0.25)', color: 'var(--danger-rose)', fontSize: '0.75rem', padding: '0.35rem 0.65rem' }}>
+                                    {item.subject} ({item.accuracy}%)
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="panel-card" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                        <h4 style={{ color: '#fff', fontSize: '1.05rem', margin: 0 }}>🎯 Recommended Personal Revision Plan</h4>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                          {focusRequired.length > 0 ? (
+                            <>
+                              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+                                Based on your historical accuracy, we recommend prioritizing study sessions for the following subjects to boost your overall score:
+                              </p>
+                              {focusRequired.slice(0, 3).map((item, idx) => (
+                                <div key={item.subject} style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-glass)', padding: '0.85rem 1rem', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                  <span style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--danger-rose)' }}>#{idx + 1}</span>
+                                  <div style={{ flex: 1 }}>
+                                    <span style={{ display: 'block', fontWeight: 600, fontSize: '0.9rem', color: '#fff' }}>{item.subject}</span>
+                                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Current accuracy: {item.accuracy}% ({item.correct} of {item.total} Qs)</span>
+                                  </div>
+                                  <button
+                                    className="btn btn-secondary"
+                                    style={{ padding: '0.35rem 0.65rem', fontSize: '0.75rem' }}
+                                    onClick={() => {
+                                      setQuizSettings({ subject: item.subject, year: 'All', limit: 10 });
+                                      window.location.hash = '#/practice';
+                                      setTimeout(startQuiz, 100);
+                                    }}
+                                  >
+                                    Practice ⚡
+                                  </button>
+                                </div>
+                              ))}
+                            </>
+                          ) : (
+                            <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-secondary)' }}>
+                              <span style={{ fontSize: '2.5rem', display: 'block' }}>🎉</span>
+                              <h5 style={{ fontWeight: 700, marginTop: '0.5rem' }}>Mastery Achieved!</h5>
+                              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                                All subjects show strong understanding. Take full-length simulations to practice time management.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="panel-card">
+                      <h4 style={{ color: '#fff', fontSize: '1.05rem', marginBottom: '1.25rem' }}>Historical Practice &amp; Exam Attempt Logs</h4>
+                      <div style={{ overflowX: 'auto', borderRadius: '10px', border: '1px solid var(--border-glass)' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', textAlign: 'left' }}>
+                          <thead>
+                            <tr style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid var(--border-glass)' }}>
+                              <th style={{ padding: '0.75rem 1rem' }}>Date Completed</th>
+                              <th style={{ padding: '0.75rem 1rem' }}>Type</th>
+                              <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Score</th>
+                              <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Accuracy</th>
+                              <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Time Taken</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {[...studentProgressList].reverse().map((record) => {
+                              const recordAccuracy = ((record.Score / record.Max_Score) * 100).toFixed(1);
+                              const recHrs = Math.floor(record.Duration_Seconds / 3600);
+                              const recMins = Math.floor((record.Duration_Seconds % 3600) / 60);
+                              const recSecs = record.Duration_Seconds % 60;
+                              return (
+                                <tr key={record.Progress_ID || record._id} style={{ borderBottom: '1px solid var(--border-glass)' }}>
+                                  <td style={{ padding: '0.75rem 1rem' }}>{new Date(record.Completed_Date).toLocaleString()}</td>
+                                  <td style={{ padding: '0.75rem 1rem', textTransform: 'capitalize', fontWeight: 600 }}>
+                                    {record.Session_Type === 'exam' ? 'Simulated Exam 📝' : 'Practice Quiz 📚'}
+                                  </td>
+                                  <td style={{ padding: '0.75rem 1rem', textAlign: 'center', fontWeight: 700, color: 'var(--accent-cyan)' }}>
+                                    {record.Score} / {record.Max_Score}
+                                  </td>
+                                  <td style={{ padding: '0.75rem 1rem', textAlign: 'center', color: parseFloat(recordAccuracy) >= 70 ? 'var(--success-emerald)' : 'var(--warning-amber)', fontWeight: 600 }}>
+                                    {recordAccuracy}%
+                                  </td>
+                                  <td style={{ padding: '0.75rem 1rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                                    {record.Session_Type === 'exam' ? `${recHrs}h ${recMins}m ${recSecs}s` : '--'}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()
+            )}
           </div>
         )}
       </div>
