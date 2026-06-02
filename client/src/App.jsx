@@ -738,8 +738,17 @@ function App() {
       if (response.ok) {
         const data = await response.json();
         if (data.questions && data.questions.length > 0) {
-          const shuffled = [...data.questions].sort(() => 0.5 - Math.random());
-          setQuizQuestions(shuffled);
+          const shuffledQuestions = [...data.questions].sort(() => 0.5 - Math.random());
+          const processedQuestions = shuffledQuestions.map(q => {
+            const keys = [];
+            if (q.Option_A !== undefined && q.Option_A !== '') keys.push('A');
+            if (q.Option_B !== undefined && q.Option_B !== '') keys.push('B');
+            if (q.Option_C !== undefined && q.Option_C !== '') keys.push('C');
+            if (q.Option_D !== undefined && q.Option_D !== '') keys.push('D');
+            const shuffledKeys = keys.sort(() => 0.5 - Math.random());
+            return { ...q, _shuffledOptionKeys: shuffledKeys };
+          });
+          setQuizQuestions(processedQuestions);
           setCurrentQuizIdx(0);
           setQuizSelectedAnswers({});
           setIsQuizActive(true);
@@ -1007,9 +1016,8 @@ function App() {
                       </div>
                     )}
 
-                    {/* Options list */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.5rem' }}>
-                      {['A', 'B', 'C', 'D'].map(opt => {
+                      {(q._shuffledOptionKeys || ['A', 'B', 'C', 'D']).map(opt => {
                         const optText = q[`Option_${opt}`];
                         if (!optText) return null;
                         
