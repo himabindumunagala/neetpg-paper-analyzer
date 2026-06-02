@@ -2116,7 +2116,9 @@ function App() {
                   }
                 });
 
-                const averageAccuracy = (sumPercentage / totalAttempts).toFixed(1);
+                const averageAccuracy = (totalCorrect + totalIncorrect) > 0 
+                  ? ((totalCorrect / (totalCorrect + totalIncorrect)) * 100).toFixed(1)
+                  : '0.0';
                 const hrs = Math.floor(totalDuration / 3600);
                 const mins = Math.floor((totalDuration % 3600) / 60);
 
@@ -2148,13 +2150,13 @@ function App() {
                 const paddingBottom = 30;
                 const chartWidth = width - paddingLeft - paddingRight;
                 const chartHeight = height - paddingTop - paddingBottom;
+                const maxPossibleScore = Math.max(...studentProgressList.map(p => p.Max_Score), 100);
 
                 const points = studentProgressList.map((p, idx) => {
                   const x = paddingLeft + (totalAttempts === 1 ? chartWidth / 2 : (idx / (totalAttempts - 1)) * chartWidth);
-                  const scorePct = (p.Score / p.Max_Score) * 100;
-                  const clampedPct = Math.max(0, scorePct);
-                  const y = paddingTop + chartHeight - (clampedPct / 100) * chartHeight;
-                  return { x, y, scorePct, date: new Date(p.Completed_Date).toLocaleDateString(), type: p.Session_Type };
+                  const clampedScore = Math.max(0, p.Score);
+                  const y = paddingTop + chartHeight - (clampedScore / maxPossibleScore) * chartHeight;
+                  return { x, y, score: p.Score, maxScore: p.Max_Score, date: new Date(p.Completed_Date).toLocaleDateString(), type: p.Session_Type };
                 });
 
                 const polylinePoints = points.map(pt => `${pt.x},${pt.y}`).join(' ');
@@ -2185,15 +2187,16 @@ function App() {
                     </div>
 
                     <div className="panel-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                      <h4 style={{ color: '#fff', fontSize: '1.05rem', margin: 0 }}>Score Percentage Timeline Trajectory</h4>
+                      <h4 style={{ color: '#fff', fontSize: '1.05rem', margin: 0 }}>Score Marks Timeline Trajectory</h4>
                       <div style={{ position: 'relative', width: '100%', overflowX: 'auto', background: 'rgba(0,0,0,0.15)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--border-glass)' }}>
                         <svg width={width} height={height} style={{ overflow: 'visible' }}>
-                          {[0, 25, 50, 75, 100].map(yVal => {
-                            const gridY = paddingTop + chartHeight - (yVal / 100) * chartHeight;
+                          {[0, 0.25, 0.5, 0.75, 1].map(ratio => {
+                            const yVal = Math.round(maxPossibleScore * ratio);
+                            const gridY = paddingTop + chartHeight - ratio * chartHeight;
                             return (
-                              <g key={yVal}>
+                              <g key={ratio}>
                                 <line x1={paddingLeft} y1={gridY} x2={width - paddingRight} y2={gridY} stroke="rgba(255,255,255,0.05)" strokeDasharray="4 4" />
-                                <text x={paddingLeft - 10} y={gridY + 4} fill="var(--text-muted)" fontSize="0.75rem" textAnchor="end">{yVal}%</text>
+                                <text x={paddingLeft - 10} y={gridY + 4} fill="var(--text-muted)" fontSize="0.75rem" textAnchor="end">{yVal}</text>
                               </g>
                             );
                           })}
@@ -2224,7 +2227,7 @@ function App() {
                                 fontWeight="bold"
                                 textAnchor="middle"
                               >
-                                {pt.scorePct.toFixed(0)}%
+                                {pt.score > 0 ? `+${pt.score}` : pt.score}
                               </text>
                               <text
                                 x={pt.x}
