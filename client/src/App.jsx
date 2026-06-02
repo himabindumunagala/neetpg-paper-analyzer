@@ -1080,7 +1080,7 @@ function App() {
                             Next Question →
                           </button>
                         ) : (
-                          <button className="btn btn-primary" style={{ padding: '0.5rem 1.5rem' }} onClick={() => setIsQuizCompleted(true)}>
+                          <button className="btn btn-primary" style={{ padding: '0.5rem 1.5rem' }} onClick={() => { setIsQuizCompleted(true); setIsQuizActive(false); }}>
                             Finish Quiz 🏁
                           </button>
                         )}
