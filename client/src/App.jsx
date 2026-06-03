@@ -1105,7 +1105,7 @@ function App() {
 
             {userProfile && (
               <div className="user-profile-header">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div className="user-profile-info" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   {userProfile.picture ? (
                     <img 
                       src={userProfile.picture} 
@@ -2745,7 +2745,7 @@ function App() {
 
           {userProfile && (
             <div className="user-profile-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <div className="user-profile-info" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 {userProfile.picture ? (
                   <img 
                     src={userProfile.picture} 

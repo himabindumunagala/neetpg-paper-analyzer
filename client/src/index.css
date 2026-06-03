@@ -217,13 +217,45 @@ h1 {
 
 @media (max-width: 992px) {
   .header {
-    flex-direction: row; /* Keep logo and hamburger on same row */
+    flex-direction: row;
     justify-content: space-between;
     align-items: center;
+    position: relative;
+    padding-bottom: 1rem;
+    flex-wrap: nowrap !important;
+  }
+  
+  .header-logo {
+    gap: 0.5rem;
+    max-width: calc(100% - 40px); /* Leave room for hamburger button */
+  }
+
+  .header-logo h2 {
+    font-size: 1.1rem !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .header-logo span {
+    font-size: 0.65rem !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+  }
+
+  .logo-badge {
+    padding: 0.35rem 0.6rem;
+    font-size: 1.2rem;
   }
   
   .hamburger-menu {
     display: flex;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    right: 0;
   }
   
   .header-nav-container {
@@ -264,9 +296,29 @@ h1 {
   
   .user-profile-header {
     width: 100%;
-    justify-content: space-between;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
     border-radius: 12px;
-    padding: 0.5rem 0.75rem;
+    padding: 1rem;
+    gap: 0.85rem;
+  }
+
+  .user-profile-info {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0.5rem;
+  }
+
+  .user-profile-info div {
+    align-items: center !important;
+    text-align: center !important;
+  }
+
+  .user-profile-header button {
+    width: 100%;
+    text-align: center;
   }
 }
 
