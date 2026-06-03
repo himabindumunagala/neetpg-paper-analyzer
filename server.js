@@ -291,36 +291,49 @@ app.get('/api/processingStatus', async (req, res) => {
  */
 app.get('/api/exam/generate', async (req, res) => {
   try {
+    const { hasImage } = req.query;
+    const isImageOnly = hasImage === 'true';
     let totalInDb = 0;
     let subjects = [];
     const isMongo = !!models.QuestionBank;
 
     if (isMongo) {
-      totalInDb = await models.QuestionBank.countDocuments({});
+      const matchCond = isImageOnly ? { Subject: { $nin: [null, ''] }, Image_Present: true } : { Subject: { $nin: [null, ''] } };
+      totalInDb = await models.QuestionBank.countDocuments(isImageOnly ? { Image_Present: true } : {});
       if (totalInDb === 0) {
-        return res.status(400).json({ error: "The question database is currently empty. Please upload NEET PG papers to generate an exam." });
+        return res.status(400).json({ error: "The question database is currently empty or has no image questions matching your filter." });
       }
 
       subjects = await models.QuestionBank.aggregate([
-        { $match: { Subject: { $nin: [null, ''] } } },
+        { $match: matchCond },
         { $group: { _id: '$Subject', count: { $sum: 1 } } },
         { $project: { _id: 0, Subject: '$_id', count: 1 } },
         { $sort: { count: -1 } }
       ]);
     } else {
-      const totalRow = await dbQuery.get("SELECT COUNT(*) as count FROM QuestionBank");
+      const totalRow = await dbQuery.get(
+        isImageOnly 
+          ? "SELECT COUNT(*) as count FROM QuestionBank WHERE Image_Present = 1"
+          : "SELECT COUNT(*) as count FROM QuestionBank"
+      );
       totalInDb = totalRow ? totalRow.count : 0;
       if (totalInDb === 0) {
-        return res.status(400).json({ error: "The question database is currently empty. Please upload NEET PG papers to generate an exam." });
+        return res.status(400).json({ error: "The question database is currently empty or has no image questions matching your filter." });
       }
 
-      subjects = await dbQuery.all(`
-        SELECT Subject, COUNT(*) as count 
-        FROM QuestionBank 
-        WHERE Subject IS NOT NULL AND Subject != ''
-        GROUP BY Subject
-        ORDER BY count DESC
-      `);
+      subjects = await dbQuery.all(
+        isImageOnly
+          ? `SELECT Subject, COUNT(*) as count 
+             FROM QuestionBank 
+             WHERE Subject IS NOT NULL AND Subject != '' AND Image_Present = 1
+             GROUP BY Subject
+             ORDER BY count DESC`
+          : `SELECT Subject, COUNT(*) as count 
+             FROM QuestionBank 
+             WHERE Subject IS NOT NULL AND Subject != ''
+             GROUP BY Subject
+             ORDER BY count DESC`
+      );
     }
 
     const targetSize = Math.min(200, totalInDb);
@@ -340,13 +353,16 @@ app.get('/api/exam/generate', async (req, res) => {
       if (subjTarget > 0) {
         let qs = [];
         if (isMongo) {
+          const sampleCond = isImageOnly ? { Subject: subj.Subject, Image_Present: true } : { Subject: subj.Subject };
           qs = await models.QuestionBank.aggregate([
-            { $match: { Subject: subj.Subject } },
+            { $match: sampleCond },
             { $sample: { size: subjTarget } }
           ]);
         } else {
           qs = await dbQuery.all(
-            `SELECT * FROM QuestionBank WHERE Subject = ? ORDER BY RANDOM() LIMIT ?`,
+            isImageOnly
+              ? `SELECT * FROM QuestionBank WHERE Subject = ? AND Image_Present = 1 ORDER BY RANDOM() LIMIT ?`
+              : `SELECT * FROM QuestionBank WHERE Subject = ? ORDER BY RANDOM() LIMIT ?`,
             [subj.Subject, subjTarget]
           );
         }

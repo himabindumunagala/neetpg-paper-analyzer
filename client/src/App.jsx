@@ -54,6 +54,7 @@ function App() {
   const [isExamActive, setIsExamActive] = useState(false);
   const [isExamCompleted, setIsExamCompleted] = useState(false);
   const [examQuestions, setExamQuestions] = useState([]);
+  const [examImagesOnly, setExamImagesOnly] = useState(false);
   const [currentExamIdx, setCurrentExamIdx] = useState(0);
   const [examSelectedAnswers, setExamSelectedAnswers] = useState({});
   const [examStatus, setExamStatus] = useState({}); // 'unvisited', 'answered', 'marked', 'answered_marked'
@@ -269,7 +270,8 @@ function App() {
   const generateExam = async () => {
     setExamLoading(true);
     try {
-      const response = await fetch('/api/exam/generate');
+      const url = examImagesOnly ? '/api/exam/generate?hasImage=true' : '/api/exam/generate';
+      const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
         if (data.questions && data.questions.length > 0) {
@@ -1119,26 +1121,28 @@ function App() {
         </header>
 
         {/* Global Student Stats */}
-        <section className="stats-strip">
-          <div className="stat-box purple">
-            <span className="stat-label">Total Practice Bank</span>
-            <div className="stat-value">
-              {stats.totalQuestions || 0} <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Questions</span>
+        {(studentTab === 'dashboard' || studentTab === 'questions') && (
+          <section className="stats-strip">
+            <div className="stat-box purple">
+              <span className="stat-label">Total Practice Bank</span>
+              <div className="stat-value">
+                {stats.totalQuestions || 0} <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Questions</span>
+              </div>
             </div>
-          </div>
-          <div className="stat-box cyan">
-            <span className="stat-label">Available Subjects</span>
-            <div className="stat-value">
-              {stats.subjects ? stats.subjects.length : 0} <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Subjects</span>
+            <div className="stat-box cyan">
+              <span className="stat-label">Available Subjects</span>
+              <div className="stat-value">
+                {stats.subjects ? stats.subjects.length : 0} <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Subjects</span>
+              </div>
             </div>
-          </div>
-          <div className="stat-box emerald">
-            <span className="stat-label">Image-based Qs</span>
-            <div className="stat-value">
-              {stats.imageCount || 0} <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Visual Diagrams</span>
+            <div className="stat-box emerald">
+              <span className="stat-label">Image-based Qs</span>
+              <div className="stat-value">
+                {stats.imageCount || 0} <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Visual Diagrams</span>
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
 
         {/* Dynamic Tab Contents */}
         {studentTab === 'dashboard' && (
@@ -1244,6 +1248,9 @@ function App() {
                     <option value={5}>5 Questions</option>
                     <option value={10}>10 Questions</option>
                     <option value={20}>20 Questions</option>
+                    <option value={50}>50 Questions</option>
+                    <option value={100}>100 Questions</option>
+                    <option value={200}>200 Questions</option>
                   </select>
                 </div>
 
@@ -1439,7 +1446,20 @@ function App() {
                   </div>
                 </div>
 
-                <button className="btn btn-cyan" style={{ padding: '0.85rem', fontWeight: 700, fontSize: '1rem', marginTop: '1rem' }} onClick={generateExam}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', justifyContent: 'center', margin: '0.5rem 0' }}>
+                  <input 
+                    type="checkbox"
+                    id="examImagesOnly"
+                    checked={examImagesOnly}
+                    onChange={(e) => setExamImagesOnly(e.target.checked)}
+                    style={{ cursor: 'pointer', width: '18px', height: '18px', accentColor: 'var(--accent-cyan)' }}
+                  />
+                  <label htmlFor="examImagesOnly" style={{ fontSize: '0.9rem', color: 'var(--text-primary)', fontWeight: 600, cursor: 'pointer', userSelect: 'none' }}>
+                    Simulate exam with image questions only 🖼️
+                  </label>
+                </div>
+
+                <button className="btn btn-cyan" style={{ padding: '0.85rem', fontWeight: 700, fontSize: '1rem', marginTop: '0.5rem' }} onClick={generateExam}>
                   🚀 Start NEET PG Exam Simulation
                 </button>
               </div>
