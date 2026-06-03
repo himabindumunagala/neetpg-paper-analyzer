@@ -2065,7 +2065,14 @@ function App() {
                             <tr key={idx} style={{ borderBottom: '1px solid var(--border-glass)' }} className="table-row-hover">
                               <td style={{ padding: '0.75rem 1.25rem', fontWeight: 600 }}>{row.year}</td>
                               <td style={{ padding: '0.75rem 1.25rem' }}>{row.Subject}</td>
-                              <td style={{ padding: '0.75rem 1.25rem', textAlign: 'center', fontWeight: 600 }}>{row.count}</td>
+                              <td style={{ padding: '0.75rem 1.25rem', textAlign: 'center', fontWeight: 600 }}>
+                                <button 
+                                  onClick={() => drilldownFromTrends(row.Subject, row.year)}
+                                  style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', textDecoration: 'underline', fontWeight: 700, cursor: 'pointer', padding: 0 }}
+                                >
+                                  {row.count}
+                                </button>
+                              </td>
                               <td style={{ padding: '0.75rem 1.25rem', textAlign: 'center', color: 'var(--accent-cyan)', fontWeight: 600 }}>
                                 {row.percentage.toFixed(1)}%
                               </td>
@@ -2440,6 +2447,221 @@ function App() {
                 );
               })()
             )}
+          </div>
+        )}
+
+        {/* Detail Overlay Modal */}
+        {selectedQuestion && (() => {
+          const currentIdx = modalQuestionsList.findIndex(q => q.Question_ID === selectedQuestion.Question_ID);
+          const isFirstQuestion = currentIdx === 0;
+          const isLastQuestion = currentIdx === modalQuestionsList.length - 1;
+          return (
+            <div className="modal-overlay" onClick={() => setSelectedQuestion(null)}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', width: '95%', maxWidth: '1000px', justifyContent: 'center' }}>
+                
+                {/* Floating Prev Button */}
+                <button 
+                  className="modal-nav-btn" 
+                  onClick={(e) => { e.stopPropagation(); navigateQuestion('prev'); }}
+                  disabled={isFirstQuestion}
+                  style={{
+                    background: 'rgba(15, 23, 42, 0.75)',
+                    border: '1px solid var(--border-glass)',
+                    color: 'var(--text-primary)',
+                    width: '52px',
+                    height: '52px',
+                    borderRadius: '99px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: isFirstQuestion ? 'not-allowed' : 'pointer',
+                    opacity: isFirstQuestion ? 0.3 : 1,
+                    fontSize: '1.5rem',
+                    transition: 'all 0.2s ease',
+                    zIndex: 1010,
+                    flexShrink: 0
+                  }}
+                  title="Previous Question (Left Arrow)"
+                >
+                  ←
+                </button>
+
+                <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                  <button className="modal-close" onClick={() => setSelectedQuestion(null)}>×</button>
+                  
+                  <div className="modal-body">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <h3 style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>
+                        Question Detail #{selectedQuestion.Question_Number}
+                      </h3>
+                      <span className={`badge conf-${selectedQuestion.OCR_Confidence}`} style={{ padding: '0.35rem 0.75rem', borderRadius: '8px' }}>
+                        OCR Confidence: {selectedQuestion.OCR_Confidence}
+                      </span>
+                    </div>
+
+                    <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-glass)', borderRadius: '12px', padding: '1.25rem' }}>
+                      <p style={{ fontWeight: 500, fontSize: '1.05rem', lineHeight: '1.5' }}>
+                        {selectedQuestion.Question_Text}
+                      </p>
+                    </div>
+
+                    {/* Show actual extracted diagram if present */}
+                    {(selectedQuestion.Image_Present === 1 || selectedQuestion.Image_Present === true) && (
+                      <div className="image-display-container" style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '0.75rem',
+                        background: 'rgba(255, 255, 255, 0.01)',
+                        border: '1px solid var(--border-glass)',
+                        borderRadius: '12px',
+                        padding: '1.25rem',
+                        margin: '1rem 0'
+                      }}>
+                        <div 
+                          style={{ position: 'relative', cursor: 'zoom-in', width: '100%', display: 'flex', justifyContent: 'center' }}
+                          onClick={() => setZoomedImage(selectedQuestion.Embedded_Image)}
+                          title="Click to Zoom Diagram"
+                        >
+                          <img 
+                            src={selectedQuestion.Embedded_Image} 
+                            alt={selectedQuestion.Image_Description || "Extracted Medical Diagram"} 
+                            style={{
+                              maxWidth: '100%',
+                              maxHeight: '380px',
+                              borderRadius: '8px',
+                              boxShadow: '0 4px 25px rgba(0, 0, 0, 0.5), 0 0 20px rgba(139, 92, 246, 0.2)',
+                              border: '1px solid rgba(255, 255, 255, 0.08)',
+                              objectFit: 'contain',
+                              background: '#ffffff',
+                              padding: '12px'
+                            }}
+                            onError={(e) => {
+                              e.target.onerror = null;
+                              e.target.src = "data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%230f172a%22/><text x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 font-size=%2240%22>🖼️</text></svg>";
+                            }}
+                          />
+                          <div className="zoom-badge-overlay">
+                            🔍 Click to Zoom
+                          </div>
+                        </div>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+                          Caption: {selectedQuestion.Image_Description || "Visual diagram extracted from PDF page"}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Display Multiple Choice Options in Grid */}
+                    <div className="options-list">
+                      <div className={`option-item ${selectedQuestion.Correct_Answer === 'A' ? 'correct' : ''}`}>
+                        <span className="option-letter">A</span>
+                        {renderOptionText(selectedQuestion.Option_A)}
+                      </div>
+                      <div className={`option-item ${selectedQuestion.Correct_Answer === 'B' ? 'correct' : ''}`}>
+                        <span className="option-letter">B</span>
+                        {renderOptionText(selectedQuestion.Option_B)}
+                      </div>
+                      <div className={`option-item ${selectedQuestion.Correct_Answer === 'C' ? 'correct' : ''}`}>
+                        <span className="option-letter">C</span>
+                        {renderOptionText(selectedQuestion.Option_C)}
+                      </div>
+                      {selectedQuestion.Option_D && selectedQuestion.Option_D.trim() !== '' && (
+                        <div className={`option-item ${selectedQuestion.Correct_Answer === 'D' ? 'correct' : ''}`}>
+                          <span className="option-letter">D</span>
+                          {renderOptionText(selectedQuestion.Option_D)}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Display Clinical Explanation */}
+                    {selectedQuestion.Answer_Explanation && (
+                      <div className="explanation-box" style={
+                        selectedQuestion.Answer_Explanation.startsWith('[AI Explanation Pending]')
+                          ? { background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '8px', padding: '1rem' }
+                          : {}
+                      }>
+                        <h4 style={{ fontFamily: 'var(--font-display)', color: 'var(--accent-violet)', marginBottom: '0.5rem', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          {selectedQuestion.Answer_Explanation.startsWith('[AI Explanation Pending]')
+                            ? <span>⏳ AI Explanation Pending</span>
+                            : <span>Clinical Rationale &amp; Answer Explanation</span>
+                          }
+                        </h4>
+                        <p style={{ fontSize: '0.85rem', color: selectedQuestion.Answer_Explanation.startsWith('[AI Explanation Pending]') ? 'rgba(245, 158, 11, 0.9)' : 'var(--text-secondary)', lineHeight: '1.6' }}>
+                          {selectedQuestion.Answer_Explanation.startsWith('[AI Explanation Pending]')
+                            ? selectedQuestion.Answer_Explanation.replace('[AI Explanation Pending] ', '')
+                            : selectedQuestion.Answer_Explanation
+                          }
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Metadata Badges Footer */}
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', paddingTop: '1rem', borderTop: '1px solid var(--border-glass)' }}>
+                      <span className="badge subject">Subject: {selectedQuestion.Subject}</span>
+                      <span className="badge subject" style={{ background: 'rgba(6, 182, 212, 0.15)', color: '#22d3ee' }}>
+                        Chapter: {selectedQuestion.Chapter}
+                      </span>
+                      <span className="badge difficulty">Difficulty: {selectedQuestion.Difficulty_Level}</span>
+                      <span className="badge difficulty" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#34d399' }}>
+                        Domain: {selectedQuestion.Clinical_or_Conceptual}
+                      </span>
+                      <span className="badge" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-primary)' }}>
+                        Year: {selectedQuestion.Previous_Year}
+                      </span>
+                      <span className="badge" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-primary)' }}>
+                        Page: {selectedQuestion.Page_Number}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Floating Next Button */}
+                <button 
+                  className="modal-nav-btn" 
+                  onClick={(e) => { e.stopPropagation(); navigateQuestion('next'); }}
+                  disabled={isLastQuestion}
+                  style={{
+                    background: 'rgba(15, 23, 42, 0.75)',
+                    border: '1px solid var(--border-glass)',
+                    color: 'var(--text-primary)',
+                    width: '52px',
+                    height: '52px',
+                    borderRadius: '99px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: isLastQuestion ? 'not-allowed' : 'pointer',
+                    opacity: isLastQuestion ? 0.3 : 1,
+                    fontSize: '1.5rem',
+                    transition: 'all 0.2s ease',
+                    zIndex: 1010,
+                    flexShrink: 0
+                  }}
+                  title="Next Question (Right Arrow)"
+                >
+                  →
+                </button>
+
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Zoomed Image Overlay Modal */}
+        {zoomedImage && (
+          <div className="zoom-overlay" onClick={() => setZoomedImage(null)}>
+            <button className="zoom-close" onClick={() => setZoomedImage(null)}>×</button>
+            <div className="zoom-content" onClick={(e) => e.stopPropagation()}>
+              <img 
+                src={zoomedImage} 
+                alt="Zoomed Medical Diagram" 
+                className="zoom-image"
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.src = "data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%230f172a%22/><text x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 font-size=%2240%22>🖼️</text></svg>";
+                }}
+              />
+            </div>
           </div>
         )}
       </div>
@@ -3094,7 +3316,14 @@ function App() {
                           <tr key={idx} style={{ borderBottom: '1px solid var(--border-glass)' }} className="table-row-hover">
                             <td style={{ padding: '0.75rem 1.25rem', fontWeight: 600 }}>{row.year}</td>
                             <td style={{ padding: '0.75rem 1.25rem' }}>{row.Subject}</td>
-                            <td style={{ padding: '0.75rem 1.25rem', textAlign: 'center', fontWeight: 600 }}>{row.count}</td>
+                            <td style={{ padding: '0.75rem 1.25rem', textAlign: 'center', fontWeight: 600 }}>
+                              <button 
+                                onClick={() => drilldownFromTrends(row.Subject, row.year)}
+                                style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', textDecoration: 'underline', fontWeight: 700, cursor: 'pointer', padding: 0 }}
+                              >
+                                {row.count}
+                              </button>
+                            </td>
                             <td style={{ padding: '0.75rem 1.25rem', textAlign: 'center', color: 'var(--accent-cyan)', fontWeight: 600 }}>
                               {row.percentage.toFixed(1)}%
                             </td>
