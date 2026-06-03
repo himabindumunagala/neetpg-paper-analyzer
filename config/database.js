@@ -9,7 +9,7 @@ const isMongoMode = true; // MongoDB is uniform across both local and production
 
 let db;
 let dbQuery = {};
-let models = {};
+const models = {};
 
 // ==========================================
 // MONGODB ATLAS INTEGRATION CONFIG (Mongoose)
@@ -116,8 +116,25 @@ if (isMongoMode) {
       Email: { type: String, required: true, unique: true, index: true },
       Name: { type: String, required: true },
       Picture: { type: String, default: null },
+      Role: { type: String, enum: ['Admin', 'Student'], default: 'Student', index: true },
       Created_Date: { type: Date, default: Date.now },
       Last_Login: { type: Date, default: Date.now }
+    },
+    { versionKey: false }
+  );
+
+  const studentProgressSchema = new mongoose.Schema(
+    {
+      Email: { type: String, required: true, index: true },
+      Session_Type: { type: String, enum: ['exam', 'practice'], required: true },
+      Score: { type: Number, required: true },
+      Max_Score: { type: Number, required: true },
+      Correct_Count: { type: Number, required: true },
+      Incorrect_Count: { type: Number, required: true },
+      Omitted_Count: { type: Number, required: true },
+      Duration_Seconds: { type: Number, required: true },
+      Subject_Breakdown: { type: mongoose.Schema.Types.Mixed, required: true },
+      Completed_Date: { type: Date, default: Date.now }
     },
     { versionKey: false }
   );
@@ -127,8 +144,9 @@ if (isMongoMode) {
   const Images = mongoose.model('Images', imagesSchema, 'Images');
   const SystemSettings = mongoose.model('SystemSettings', systemSettingsSchema, 'SystemSettings');
   const User = mongoose.model('User', userSchema, 'User');
+  const StudentProgress = mongoose.model('StudentProgress', studentProgressSchema, 'StudentProgress');
 
-  models = { UploadHistory, QuestionBank, Images, SystemSettings, User };
+  Object.assign(models, { UploadHistory, QuestionBank, Images, SystemSettings, User, StudentProgress });
 
   // Helper parser for mapping SQL parameter indexes to Mongoose query filters
   function parseQuestionBankFilterSql(sql, params) {
@@ -664,6 +682,24 @@ async function initDatabase() {
         Setting_Value TEXT NOT NULL
       );
     `);
+
+    await dbQuery.run(`
+      CREATE TABLE IF NOT EXISTS StudentProgress (
+        Progress_ID TEXT PRIMARY KEY,
+        Email TEXT NOT NULL,
+        Session_Type TEXT NOT NULL,
+        Score INTEGER NOT NULL,
+        Max_Score INTEGER NOT NULL,
+        Correct_Count INTEGER NOT NULL,
+        Incorrect_Count INTEGER NOT NULL,
+        Omitted_Count INTEGER NOT NULL,
+        Duration_Seconds INTEGER NOT NULL,
+        Subject_Breakdown TEXT NOT NULL,
+        Completed_Date DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await dbQuery.run(`CREATE INDEX IF NOT EXISTS IDX_SP_Email ON StudentProgress(Email);`);
 
     try {
       const hasPasscode = await dbQuery.get("SELECT 1 FROM SystemSettings WHERE Setting_Key = 'admin_password'");
