@@ -76,8 +76,8 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authChecking, setAuthChecking] = useState(true);
   const [userProfile, setUserProfile] = useState(null);
-  const [authError, setAuthError] = useState('');
-  
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   const fileInputRef = useRef(null);
   const logsEndRef = useRef(null);
 
@@ -235,6 +235,7 @@ function App() {
           setActiveTab('dashboard');
         }
       }
+      setMobileMenuOpen(false);
     };
 
     handleHashChange();
@@ -1038,7 +1039,7 @@ function App() {
     return (
       <div className="app-container">
         {/* Student Header */}
-        <header className="header">
+        <header className="header" style={{ position: 'relative' }}>
           <div className="header-logo">
             <div className="logo-badge" style={{ background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-violet))' }}>🩺</div>
             <div>
@@ -1050,74 +1051,86 @@ function App() {
               </span>
             </div>
           </div>
+
+          <button 
+            className={`hamburger-menu ${mobileMenuOpen ? 'open' : ''}`} 
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label="Toggle menu"
+          >
+            <span className="hamburger-line"></span>
+            <span className="hamburger-line"></span>
+            <span className="hamburger-line"></span>
+          </button>
           
-          <nav className="nav-tabs">
-            <button 
-              className={`nav-tab ${studentTab === 'dashboard' ? 'active' : ''}`}
-              onClick={() => window.location.hash = '#/dashboard'}
-            >
-              Dashboard
-            </button>
-            <button 
-              className={`nav-tab ${studentTab === 'practice' ? 'active' : ''}`}
-              onClick={() => window.location.hash = '#/practice'}
-            >
-              Interactive Quiz
-            </button>
-            <button 
-              className={`nav-tab ${studentTab === 'exam' ? 'active' : ''}`}
-              onClick={() => window.location.hash = '#/exam'}
-            >
-              Exam Simulator
-            </button>
-
-            <button 
-              className={`nav-tab ${studentTab === 'questions' ? 'active' : ''}`}
-              onClick={() => window.location.hash = '#/question-bank'}
-            >
-              Question Bank
-            </button>
-            <button 
-              className={`nav-tab ${studentTab === 'trends' ? 'active' : ''}`}
-              onClick={() => window.location.hash = '#/trends'}
-            >
-              Weightage Trends
-            </button>
-            <button 
-              className={`nav-tab ${studentTab === 'progress' ? 'active' : ''}`}
-              onClick={() => window.location.hash = '#/progress'}
-            >
-              Progress Tracker
-            </button>
-          </nav>
-
-          {userProfile && (
-            <div className="user-profile-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                {userProfile.picture ? (
-                  <img 
-                    src={userProfile.picture} 
-                    alt={userProfile.name} 
-                    style={{ width: '32px', height: '32px', borderRadius: '50%', border: '1.5px solid var(--accent-cyan)' }}
-                  />
-                ) : (
-                  <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--accent-violet)', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold', fontSize: '0.85rem' }}>
-                    {userProfile.name.charAt(0)}
-                  </div>
-                )}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff', lineHeight: '1.2' }}>{userProfile.name}</span>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{userProfile.email}</span>
-                </div>
-              </div>
+          <div className={`header-nav-container ${mobileMenuOpen ? 'mobile-open' : ''}`}>
+            <nav className="nav-tabs">
               <button 
-                onClick={handleLogout}
-                style={{ background: 'rgba(255, 107, 107, 0.1)', border: '1px solid rgba(255, 107, 107, 0.2)', color: '#ff6b6b', padding: '0.35rem 0.75rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}
+                className={`nav-tab ${studentTab === 'dashboard' ? 'active' : ''}`}
+                onClick={() => window.location.hash = '#/dashboard'}
               >
-                Sign Out
+                Dashboard
               </button>
-            </div>
-          )}
+              <button 
+                className={`nav-tab ${studentTab === 'practice' ? 'active' : ''}`}
+                onClick={() => window.location.hash = '#/practice'}
+              >
+                Interactive Quiz
+              </button>
+              <button 
+                className={`nav-tab ${studentTab === 'exam' ? 'active' : ''}`}
+                onClick={() => window.location.hash = '#/exam'}
+              >
+                Exam Simulator
+              </button>
+
+              <button 
+                className={`nav-tab ${studentTab === 'questions' ? 'active' : ''}`}
+                onClick={() => window.location.hash = '#/question-bank'}
+              >
+                Question Bank
+              </button>
+              <button 
+                className={`nav-tab ${studentTab === 'trends' ? 'active' : ''}`}
+                onClick={() => window.location.hash = '#/trends'}
+              >
+                Weightage Trends
+              </button>
+              <button 
+                className={`nav-tab ${studentTab === 'progress' ? 'active' : ''}`}
+                onClick={() => window.location.hash = '#/progress'}
+              >
+                Progress Tracker
+              </button>
+            </nav>
+
+            {userProfile && (
+              <div className="user-profile-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  {userProfile.picture ? (
+                    <img 
+                      src={userProfile.picture} 
+                      alt={userProfile.name} 
+                      style={{ width: '32px', height: '32px', borderRadius: '50%', border: '1.5px solid var(--accent-cyan)' }}
+                    />
+                  ) : (
+                    <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--accent-violet)', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold', fontSize: '0.85rem' }}>
+                      {userProfile.name.charAt(0)}
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff', lineHeight: '1.2' }}>{userProfile.name}</span>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{userProfile.email}</span>
+                  </div>
+                </div>
+                <button 
+                  onClick={handleLogout}
+                  style={{ background: 'rgba(255, 107, 107, 0.1)', border: '1px solid rgba(255, 107, 107, 0.2)', color: '#ff6b6b', padding: '0.35rem 0.75rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}
+                >
+                  Sign Out
+                </button>
+              </div>
+            )}
+          </div>
         </header>
 
         {/* Global Student Stats */}
@@ -2671,7 +2684,7 @@ function App() {
   return (
     <div className="app-container">
       {/* Header Bar */}
-      <header className="header">
+      <header className="header" style={{ position: 'relative' }}>
         <div className="header-logo">
           <div className="logo-badge">🩺</div>
           <div>
@@ -2683,71 +2696,83 @@ function App() {
             </span>
           </div>
         </div>
-        
-        <nav className="nav-tabs">
-          <button 
-            className={`nav-tab ${activeTab === 'dashboard' ? 'active' : ''}`}
-            onClick={() => window.location.hash = '#/dashboard'}
-          >
-            Dashboard
-          </button>
-          <button 
-            className={`nav-tab ${activeTab === 'questions' ? 'active' : ''}`}
-            onClick={() => window.location.hash = '#/question-bank'}
-          >
-            Question Bank
-          </button>
-          <button 
-            className={`nav-tab ${activeTab === 'analytics' ? 'active' : ''}`}
-            onClick={() => window.location.hash = '#/trends'}
-          >
-            Trend Hub
-          </button>
-          <button 
-            className={`nav-tab ${activeTab === 'settings' ? 'active' : ''}`}
-            onClick={() => window.location.hash = '#/console'}
-          >
-            System Console
-          </button>
-          <button 
-            className="nav-tab"
-            onClick={handleOpenSettings}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}
-            title="Configure System Settings"
-          >
-            ⚙️ Settings
-          </button>
-        </nav>
 
-        {userProfile && (
-          <div className="user-profile-header">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              {userProfile.picture ? (
-                <img 
-                  src={userProfile.picture} 
-                  alt={userProfile.name} 
-                  style={{ width: '32px', height: '32px', borderRadius: '50%', border: '1.5px solid var(--accent-cyan)' }}
-                />
-              ) : (
-                <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--accent-violet)', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold', fontSize: '0.85rem' }}>
-                  {userProfile.name.charAt(0)}
-                </div>
-              )}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff', lineHeight: '1.2' }}>{userProfile.name}</span>
-                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{userProfile.email}</span>
-              </div>
-            </div>
+        <button 
+          className={`hamburger-menu ${mobileMenuOpen ? 'open' : ''}`} 
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          aria-label="Toggle menu"
+        >
+          <span className="hamburger-line"></span>
+          <span className="hamburger-line"></span>
+          <span className="hamburger-line"></span>
+        </button>
+        
+        <div className={`header-nav-container ${mobileMenuOpen ? 'mobile-open' : ''}`}>
+          <nav className="nav-tabs">
             <button 
-              onClick={handleLogout}
-              style={{ background: 'rgba(255, 107, 107, 0.1)', border: '1px solid rgba(255, 107, 107, 0.2)', color: '#ff6b6b', padding: '0.35rem 0.75rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}
-              onMouseEnter={(e) => { e.target.style.background = 'rgba(255, 107, 107, 0.2)'; }}
-              onMouseLeave={(e) => { e.target.style.background = 'rgba(255, 107, 107, 0.1)'; }}
+              className={`nav-tab ${activeTab === 'dashboard' ? 'active' : ''}`}
+              onClick={() => window.location.hash = '#/dashboard'}
             >
-              Sign Out
+              Dashboard
             </button>
-          </div>
-        )}
+            <button 
+              className={`nav-tab ${activeTab === 'questions' ? 'active' : ''}`}
+              onClick={() => window.location.hash = '#/question-bank'}
+            >
+              Question Bank
+            </button>
+            <button 
+              className={`nav-tab ${activeTab === 'analytics' ? 'active' : ''}`}
+              onClick={() => window.location.hash = '#/trends'}
+            >
+              Trend Hub
+            </button>
+            <button 
+              className={`nav-tab ${activeTab === 'settings' ? 'active' : ''}`}
+              onClick={() => window.location.hash = '#/console'}
+            >
+              System Console
+            </button>
+            <button 
+              className="nav-tab"
+              onClick={handleOpenSettings}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+              title="Configure System Settings"
+            >
+              ⚙️ Settings
+            </button>
+          </nav>
+
+          {userProfile && (
+            <div className="user-profile-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                {userProfile.picture ? (
+                  <img 
+                    src={userProfile.picture} 
+                    alt={userProfile.name} 
+                    style={{ width: '32px', height: '32px', borderRadius: '50%', border: '1.5px solid var(--accent-cyan)' }}
+                  />
+                ) : (
+                  <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--accent-violet)', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold', fontSize: '0.85rem' }}>
+                    {userProfile.name.charAt(0)}
+                  </div>
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff', lineHeight: '1.2' }}>{userProfile.name}</span>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{userProfile.email}</span>
+                </div>
+              </div>
+              <button 
+                onClick={handleLogout}
+                style={{ background: 'rgba(255, 107, 107, 0.1)', border: '1px solid rgba(255, 107, 107, 0.2)', color: '#ff6b6b', padding: '0.35rem 0.75rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}
+                onMouseEnter={(e) => { e.target.style.background = 'rgba(255, 107, 107, 0.2)'; }}
+                onMouseLeave={(e) => { e.target.style.background = 'rgba(255, 107, 107, 0.1)'; }}
+              >
+                Sign Out
+              </button>
+            </div>
+          )}
+        </div>
       </header>
 
       {/* Global Stat Indicators */}
