@@ -5,4 +5,5 @@ logs/
 *.db-wal
 *.db-journal
 .env
+public/uploads/
 
