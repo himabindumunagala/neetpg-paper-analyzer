@@ -42,7 +42,7 @@ function App() {
   
   // Student specific states
   const [studentTab, setStudentTab] = useState('dashboard');
-  const [quizSettings, setQuizSettings] = useState({ subject: 'All', year: 'All', limit: 10 });
+  const [quizSettings, setQuizSettings] = useState({ subject: 'All', year: 'All', limit: 10, imagesOnly: false });
   const [quizQuestions, setQuizQuestions] = useState([]);
   const [currentQuizIdx, setCurrentQuizIdx] = useState(0);
   const [quizSelectedAnswers, setQuizSelectedAnswers] = useState({});
@@ -985,6 +985,9 @@ function App() {
       if (quizSettings.year !== 'All') {
         url += `&year=${encodeURIComponent(quizSettings.year)}`;
       }
+      if (quizSettings.imagesOnly) {
+        url += `&hasImage=true`;
+      }
       
       const response = await fetch(url);
       if (response.ok) {
@@ -1163,7 +1166,7 @@ function App() {
                 className="btn btn-cyan" 
                 style={{ width: '100%', padding: '0.75rem', fontWeight: 600, display: 'inline-flex', justifyContent: 'center', gap: '0.5rem' }}
                 onClick={() => {
-                  setQuizSettings({ subject: 'All', year: 'All', limit: 10 });
+                  setQuizSettings({ subject: 'All', year: 'All', limit: 10, imagesOnly: false });
                   window.location.hash = '#/practice';
                   setTimeout(startQuiz, 100);
                 }}
@@ -1244,7 +1247,20 @@ function App() {
                   </select>
                 </div>
 
-                <button className="btn btn-cyan" style={{ marginTop: '1rem', padding: '0.75rem', fontWeight: 600 }} onClick={startQuiz}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', margin: '0.5rem 0' }}>
+                  <input 
+                    type="checkbox"
+                    id="quizImagesOnly"
+                    checked={quizSettings.imagesOnly}
+                    onChange={(e) => setQuizSettings({ ...quizSettings, imagesOnly: e.target.checked })}
+                    style={{ cursor: 'pointer', width: '18px', height: '18px', accentColor: 'var(--accent-cyan)' }}
+                  />
+                  <label htmlFor="quizImagesOnly" style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 600, cursor: 'pointer', userSelect: 'none' }}>
+                    Practice questions with images only 🖼️
+                  </label>
+                </div>
+
+                <button className="btn btn-cyan" style={{ marginTop: '0.5rem', padding: '0.75rem', fontWeight: 600 }} onClick={startQuiz}>
                   🚀 Start Practice Quiz
                 </button>
               </div>
@@ -2336,7 +2352,7 @@ function App() {
                                     className="btn btn-secondary"
                                     style={{ padding: '0.35rem 0.65rem', fontSize: '0.75rem' }}
                                     onClick={() => {
-                                      setQuizSettings({ subject: item.subject, year: 'All', limit: 10 });
+                                      setQuizSettings({ subject: item.subject, year: 'All', limit: 10, imagesOnly: false });
                                       window.location.hash = '#/practice';
                                       setTimeout(startQuiz, 100);
                                     }}
