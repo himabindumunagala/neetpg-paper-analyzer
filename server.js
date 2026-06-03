@@ -951,15 +951,27 @@ app.post('/api/auth/google', async (req, res) => {
   }
 });
 
+const normalizeEmail = (emailStr) => {
+  if (!emailStr) return '';
+  let email = emailStr.toLowerCase().trim();
+  if (email.endsWith('@gmail.com')) {
+    const parts = email.split('@');
+    const normalizedUser = parts[0].replace(/\./g, '');
+    email = `${normalizedUser}@gmail.com`;
+  }
+  return email;
+};
+
 /**
  * 13b. GET /api/student/progress
  * Retrieves historical progress for a student.
  */
 app.get('/api/student/progress', async (req, res) => {
-  const email = req.headers['x-user-email'];
+  let email = req.headers['x-user-email'];
   if (!email) {
     return res.status(400).json({ error: 'User email is required in headers.' });
   }
+  email = normalizeEmail(email);
 
   try {
     const isMongo = !!models.QuestionBank;
@@ -996,10 +1008,11 @@ app.get('/api/student/progress', async (req, res) => {
  * Saves an exam/practice attempt.
  */
 app.post('/api/student/progress', async (req, res) => {
-  const email = req.headers['x-user-email'];
+  let email = req.headers['x-user-email'];
   if (!email) {
     return res.status(400).json({ error: 'User email is required in headers.' });
   }
+  email = normalizeEmail(email);
 
   const { sessionType, score, maxScore, correctCount, incorrectCount, omittedCount, durationSeconds, subjectBreakdown } = req.body;
 
