@@ -951,6 +951,39 @@ app.post('/api/auth/google', async (req, res) => {
   }
 });
 
+app.get('/api/debug-db', async (req, res) => {
+  try {
+    const isMongo = !!models.QuestionBank;
+    let progressCount = 0;
+    let questionsCount = 0;
+    let allProgressEmails = [];
+
+    if (isMongo) {
+      progressCount = await models.StudentProgress.countDocuments({});
+      questionsCount = await models.QuestionBank.countDocuments({});
+      const records = await models.StudentProgress.find({});
+      allProgressEmails = records.map(r => r.Email);
+    } else {
+      const pRow = await dbQuery.get("SELECT COUNT(*) as count FROM StudentProgress");
+      progressCount = pRow ? pRow.count : 0;
+      const qRow = await dbQuery.get("SELECT COUNT(*) as count FROM QuestionBank");
+      questionsCount = qRow ? qRow.count : 0;
+      const rows = await dbQuery.all("SELECT Email FROM StudentProgress");
+      allProgressEmails = rows.map(r => r.Email);
+    }
+
+    res.status(200).json({
+      databaseMode: isMongo ? 'MongoDB' : 'SQLite',
+      progressCount,
+      questionsCount,
+      allProgressEmails,
+      envMongoUriExists: !!process.env.MONGODB_URI
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 const normalizeEmail = (emailStr) => {
   if (!emailStr) return '';
   let email = emailStr.toLowerCase().trim();
