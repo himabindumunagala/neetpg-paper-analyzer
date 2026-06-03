@@ -73,10 +73,20 @@ function App() {
   const [keyLoadError, setKeyLoadError] = useState('');
   
   // Authentication & Google User States
+  const [userProfile, setUserProfile] = useState(null);
+  const [authError, setAuthError] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authChecking, setAuthChecking] = useState(true);
-  const [userProfile, setUserProfile] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  const toggleSidebar = () => {
+    if (window.innerWidth <= 992) {
+      setMobileMenuOpen(!mobileMenuOpen);
+    } else {
+      setSidebarCollapsed(!sidebarCollapsed);
+    }
+  };
 
   const fileInputRef = useRef(null);
   const logsEndRef = useRef(null);
@@ -1037,75 +1047,89 @@ function App() {
 
   if (userProfile && userProfile.role === 'Student') {
     return (
-      <div className="app-container">
-        {/* Student Header */}
-        <header className="header" style={{ position: 'relative' }}>
-          <div className="header-logo">
-            <div className="logo-badge" style={{ background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-violet))' }}>🩺</div>
-            <div>
-              <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.4rem' }}>
-                NEET PG Student Portal
-              </h2>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-                Interactive Study & Quiz Environment
-              </span>
-            </div>
+      <div className={`app-wrapper ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${mobileMenuOpen ? 'mobile-sidebar-open' : ''}`}>
+        
+        {/* Left Sidebar */}
+        <aside className="sidebar-container">
+          <div className="sidebar-logo">
+            <span className="logo-icon">🩺</span>
+            {!sidebarCollapsed && <span className="logo-text">Student Portal</span>}
           </div>
-
-          <button 
-            className={`hamburger-menu ${mobileMenuOpen ? 'open' : ''}`} 
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            aria-label="Toggle menu"
-          >
-            <span className="hamburger-line"></span>
-            <span className="hamburger-line"></span>
-            <span className="hamburger-line"></span>
-          </button>
           
-          <div className={`header-nav-container ${mobileMenuOpen ? 'mobile-open' : ''}`}>
-            <nav className="nav-tabs">
-              <button 
-                className={`nav-tab ${studentTab === 'dashboard' ? 'active' : ''}`}
-                onClick={() => window.location.hash = '#/dashboard'}
-              >
-                Dashboard
-              </button>
-              <button 
-                className={`nav-tab ${studentTab === 'practice' ? 'active' : ''}`}
-                onClick={() => window.location.hash = '#/practice'}
-              >
-                Interactive Quiz
-              </button>
-              <button 
-                className={`nav-tab ${studentTab === 'exam' ? 'active' : ''}`}
-                onClick={() => window.location.hash = '#/exam'}
-              >
-                Exam Simulator
-              </button>
+          <nav className="sidebar-nav">
+            <button 
+              className={`sidebar-tab ${studentTab === 'dashboard' ? 'active' : ''}`}
+              onClick={() => { window.location.hash = '#/dashboard'; setMobileMenuOpen(false); }}
+            >
+              <span className="tab-icon">📊</span>
+              {!sidebarCollapsed && <span className="sidebar-tab-label">Dashboard</span>}
+            </button>
+            <button 
+              className={`sidebar-tab ${studentTab === 'practice' ? 'active' : ''}`}
+              onClick={() => { window.location.hash = '#/practice'; setMobileMenuOpen(false); }}
+            >
+              <span className="tab-icon">📚</span>
+              {!sidebarCollapsed && <span className="sidebar-tab-label">Interactive Quiz</span>}
+            </button>
+            <button 
+              className={`sidebar-tab ${studentTab === 'exam' ? 'active' : ''}`}
+              onClick={() => { window.location.hash = '#/exam'; setMobileMenuOpen(false); }}
+            >
+              <span className="tab-icon">📝</span>
+              {!sidebarCollapsed && <span className="sidebar-tab-label">Exam Simulator</span>}
+            </button>
+            <button 
+              className={`sidebar-tab ${studentTab === 'questions' ? 'active' : ''}`}
+              onClick={() => { window.location.hash = '#/question-bank'; setMobileMenuOpen(false); }}
+            >
+              <span className="tab-icon">🗄️</span>
+              {!sidebarCollapsed && <span className="sidebar-tab-label">Question Bank</span>}
+            </button>
+            <button 
+              className={`sidebar-tab ${studentTab === 'trends' ? 'active' : ''}`}
+              onClick={() => { window.location.hash = '#/trends'; setMobileMenuOpen(false); }}
+            >
+              <span className="tab-icon">📈</span>
+              {!sidebarCollapsed && <span className="sidebar-tab-label">Weightage Trends</span>}
+            </button>
+            <button 
+              className={`sidebar-tab ${studentTab === 'progress' ? 'active' : ''}`}
+              onClick={() => { window.location.hash = '#/progress'; setMobileMenuOpen(false); }}
+            >
+              <span className="tab-icon">👤</span>
+              {!sidebarCollapsed && <span className="sidebar-tab-label">Progress Tracker</span>}
+            </button>
+          </nav>
+        </aside>
 
+        {/* Right Main Panel */}
+        <div className="main-content-panel">
+          
+          {/* Top Header Bar */}
+          <header className="top-header-bar">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
               <button 
-                className={`nav-tab ${studentTab === 'questions' ? 'active' : ''}`}
-                onClick={() => window.location.hash = '#/question-bank'}
+                className="sidebar-toggle-btn"
+                onClick={toggleSidebar}
+                title={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
               >
-                Question Bank
+                ☰
               </button>
-              <button 
-                className={`nav-tab ${studentTab === 'trends' ? 'active' : ''}`}
-                onClick={() => window.location.hash = '#/trends'}
-              >
-                Weightage Trends
-              </button>
-              <button 
-                className={`nav-tab ${studentTab === 'progress' ? 'active' : ''}`}
-                onClick={() => window.location.hash = '#/progress'}
-              >
-                Progress Tracker
-              </button>
-            </nav>
+              <div>
+                <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.2rem', color: '#fff', margin: 0 }}>
+                  {studentTab === 'dashboard' && 'Dashboard Overview'}
+                  {studentTab === 'practice' && 'Interactive Practice'}
+                  {studentTab === 'exam' && 'Exam Simulator'}
+                  {studentTab === 'questions' && 'Question Bank'}
+                  {studentTab === 'trends' && 'YoY Weightage Trends'}
+                  {studentTab === 'progress' && 'Performance Tracker'}
+                </h2>
+              </div>
+            </div>
 
             {userProfile && (
               <div className="user-profile-header">
-                <div className="user-profile-info" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   {userProfile.picture ? (
                     <img 
                       src={userProfile.picture} 
@@ -1117,7 +1141,7 @@ function App() {
                       {userProfile.name.charAt(0)}
                     </div>
                   )}
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                  <div className="user-profile-text-info" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
                     <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff', lineHeight: '1.2' }}>{userProfile.name}</span>
                     <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{userProfile.email}</span>
                   </div>
@@ -1130,8 +1154,10 @@ function App() {
                 </button>
               </div>
             )}
-          </div>
-        </header>
+          </header>
+
+          {/* Actual Content Area */}
+          <div className="content-container">
 
         {/* Global Student Stats */}
         {(studentTab === 'dashboard' || studentTab === 'questions') && (
@@ -2462,6 +2488,8 @@ function App() {
             )}
           </div>
         )}
+          </div> {/* closes content-container */}
+        </div> {/* closes main-content-panel */}
 
         {/* Detail Overlay Modal */}
         {selectedQuestion && (() => {
@@ -2682,66 +2710,77 @@ function App() {
   }
 
   return (
-    <div className="app-container">
-      {/* Header Bar */}
-      <header className="header" style={{ position: 'relative' }}>
-        <div className="header-logo">
-          <div className="logo-badge">🩺</div>
-          <div>
-            <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.4rem' }}>
-              NEET PG Ingestion Console
-            </h2>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-              High-Fidelity Paper Parsing System
-            </span>
-          </div>
+    <div className={`app-wrapper ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${mobileMenuOpen ? 'mobile-sidebar-open' : ''}`}>
+      
+      {/* Left Sidebar */}
+      <aside className="sidebar-container">
+        <div className="sidebar-logo">
+          <span className="logo-icon">🩺</span>
+          {!sidebarCollapsed && <span className="logo-text">Ingestion Console</span>}
         </div>
-
-        <button 
-          className={`hamburger-menu ${mobileMenuOpen ? 'open' : ''}`} 
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          aria-label="Toggle menu"
-        >
-          <span className="hamburger-line"></span>
-          <span className="hamburger-line"></span>
-          <span className="hamburger-line"></span>
-        </button>
         
-        <div className={`header-nav-container ${mobileMenuOpen ? 'mobile-open' : ''}`}>
-          <nav className="nav-tabs">
+        <nav className="sidebar-nav">
+          <button 
+            className={`sidebar-tab ${activeTab === 'dashboard' ? 'active' : ''}`}
+            onClick={() => { window.location.hash = '#/dashboard'; setMobileMenuOpen(false); }}
+          >
+            <span className="tab-icon">📊</span>
+            {!sidebarCollapsed && <span className="sidebar-tab-label">Dashboard</span>}
+          </button>
+          <button 
+            className={`sidebar-tab ${activeTab === 'questions' ? 'active' : ''}`}
+            onClick={() => { window.location.hash = '#/question-bank'; setMobileMenuOpen(false); }}
+          >
+            <span className="tab-icon">🗄️</span>
+            {!sidebarCollapsed && <span className="sidebar-tab-label">Question Bank</span>}
+          </button>
+          <button 
+            className={`sidebar-tab ${activeTab === 'analytics' ? 'active' : ''}`}
+            onClick={() => { window.location.hash = '#/trends'; setMobileMenuOpen(false); }}
+          >
+            <span className="tab-icon">📈</span>
+            {!sidebarCollapsed && <span className="sidebar-tab-label">Trend Hub</span>}
+          </button>
+          <button 
+            className={`sidebar-tab ${activeTab === 'settings' ? 'active' : ''}`}
+            onClick={() => { window.location.hash = '#/console'; setMobileMenuOpen(false); }}
+          >
+            <span className="tab-icon">💻</span>
+            {!sidebarCollapsed && <span className="sidebar-tab-label">System Console</span>}
+          </button>
+          <button 
+            className="sidebar-tab"
+            onClick={handleOpenSettings}
+            title="Configure System Settings"
+          >
+            <span className="tab-icon">⚙️</span>
+            {!sidebarCollapsed && <span className="sidebar-tab-label">Settings</span>}
+          </button>
+        </nav>
+      </aside>
+
+      {/* Right Main Panel */}
+      <div className="main-content-panel">
+        
+        {/* Top Header Bar */}
+        <header className="top-header-bar">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             <button 
-              className={`nav-tab ${activeTab === 'dashboard' ? 'active' : ''}`}
-              onClick={() => window.location.hash = '#/dashboard'}
+              className="sidebar-toggle-btn"
+              onClick={toggleSidebar}
+              title={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
             >
-              Dashboard
+              ☰
             </button>
-            <button 
-              className={`nav-tab ${activeTab === 'questions' ? 'active' : ''}`}
-              onClick={() => window.location.hash = '#/question-bank'}
-            >
-              Question Bank
-            </button>
-            <button 
-              className={`nav-tab ${activeTab === 'analytics' ? 'active' : ''}`}
-              onClick={() => window.location.hash = '#/trends'}
-            >
-              Trend Hub
-            </button>
-            <button 
-              className={`nav-tab ${activeTab === 'settings' ? 'active' : ''}`}
-              onClick={() => window.location.hash = '#/console'}
-            >
-              System Console
-            </button>
-            <button 
-              className="nav-tab"
-              onClick={handleOpenSettings}
-              style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}
-              title="Configure System Settings"
-            >
-              ⚙️ Settings
-            </button>
-          </nav>
+            <div>
+              <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.2rem', color: '#fff', margin: 0 }}>
+                {activeTab === 'dashboard' && 'Ingestion Dashboard'}
+                {activeTab === 'questions' && 'Question Ingestion Bank'}
+                {activeTab === 'analytics' && 'Subject Trends Analytics'}
+                {activeTab === 'settings' && 'System Configuration Console'}
+              </h2>
+            </div>
+          </div>
 
           {userProfile && (
             <div className="user-profile-header">
@@ -2757,7 +2796,7 @@ function App() {
                     {userProfile.name.charAt(0)}
                   </div>
                 )}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                <div className="user-profile-text-info" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
                   <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff', lineHeight: '1.2' }}>{userProfile.name}</span>
                   <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{userProfile.email}</span>
                 </div>
@@ -2772,8 +2811,10 @@ function App() {
               </button>
             </div>
           )}
-        </div>
-      </header>
+        </header>
+
+        {/* Content Area */}
+        <div className="content-container">
 
       {/* Global Stat Indicators */}
       <section className="stats-strip">
@@ -3482,6 +3523,8 @@ function App() {
           </div>
         </div>
       )}
+      </div> {/* closes content-container */}
+    </div> {/* closes main-content-panel */}
 
       {/* Detail Overlay Modal */}
       {selectedQuestion && (() => {
