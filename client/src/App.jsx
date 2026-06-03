@@ -292,7 +292,7 @@ function App() {
             if (q.Option_B !== undefined && q.Option_B !== '') keys.push('B');
             if (q.Option_C !== undefined && q.Option_C !== '') keys.push('C');
             if (q.Option_D !== undefined && q.Option_D !== '') keys.push('D');
-            const shuffledKeys = keys.sort(() => 0.5 - Math.random());
+            const shuffledKeys = keys;
             return { ...q, _shuffledOptionKeys: shuffledKeys };
           });
           setExamQuestions(processedQuestions);
@@ -1013,7 +1013,7 @@ function App() {
             if (q.Option_B !== undefined && q.Option_B !== '') keys.push('B');
             if (q.Option_C !== undefined && q.Option_C !== '') keys.push('C');
             if (q.Option_D !== undefined && q.Option_D !== '') keys.push('D');
-            const shuffledKeys = keys.sort(() => 0.5 - Math.random());
+            const shuffledKeys = keys;
             return { ...q, _shuffledOptionKeys: shuffledKeys };
           });
           setQuizQuestions(processedQuestions);
