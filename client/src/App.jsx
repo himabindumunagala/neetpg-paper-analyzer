@@ -1089,35 +1089,35 @@ function App() {
             >
               Progress Tracker
             </button>
-            
-            {userProfile && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginLeft: '1.5rem', paddingLeft: '1.5rem', borderLeft: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  {userProfile.picture ? (
-                    <img 
-                      src={userProfile.picture} 
-                      alt={userProfile.name} 
-                      style={{ width: '32px', height: '32px', borderRadius: '50%', border: '1.5px solid var(--accent-cyan)' }}
-                    />
-                  ) : (
-                    <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--accent-violet)', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold', fontSize: '0.85rem' }}>
-                      {userProfile.name.charAt(0)}
-                    </div>
-                  )}
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff', lineHeight: '1.2' }}>{userProfile.name}</span>
-                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{userProfile.email}</span>
-                  </div>
-                </div>
-                <button 
-                  onClick={handleLogout}
-                  style={{ background: 'rgba(255, 107, 107, 0.1)', border: '1px solid rgba(255, 107, 107, 0.2)', color: '#ff6b6b', padding: '0.35rem 0.75rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}
-                >
-                  Sign Out
-                </button>
-              </div>
-            )}
           </nav>
+
+          {userProfile && (
+            <div className="user-profile-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                {userProfile.picture ? (
+                  <img 
+                    src={userProfile.picture} 
+                    alt={userProfile.name} 
+                    style={{ width: '32px', height: '32px', borderRadius: '50%', border: '1.5px solid var(--accent-cyan)' }}
+                  />
+                ) : (
+                  <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--accent-violet)', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold', fontSize: '0.85rem' }}>
+                    {userProfile.name.charAt(0)}
+                  </div>
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff', lineHeight: '1.2' }}>{userProfile.name}</span>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{userProfile.email}</span>
+                </div>
+              </div>
+              <button 
+                onClick={handleLogout}
+                style={{ background: 'rgba(255, 107, 107, 0.1)', border: '1px solid rgba(255, 107, 107, 0.2)', color: '#ff6b6b', padding: '0.35rem 0.75rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}
+              >
+                Sign Out
+              </button>
+            </div>
+          )}
         </header>
 
         {/* Global Student Stats */}
@@ -1483,7 +1483,7 @@ function App() {
                 const countUnvisited = examQuestions.length - countAnswered - countUnanswered - countMarked - countAnsweredMarked;
 
                 return (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '2rem', flex: 1 }}>
+                  <div className="exam-container-layout">
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-glass)', paddingBottom: '1rem' }}>
                         <div>
@@ -2717,37 +2717,37 @@ function App() {
           >
             ⚙️ Settings
           </button>
-          
-          {userProfile && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginLeft: '1.5rem', paddingLeft: '1.5rem', borderLeft: '1px solid rgba(255, 255, 255, 0.1)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                {userProfile.picture ? (
-                  <img 
-                    src={userProfile.picture} 
-                    alt={userProfile.name} 
-                    style={{ width: '32px', height: '32px', borderRadius: '50%', border: '1.5px solid var(--neon-cyan)' }}
-                  />
-                ) : (
-                  <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--neon-purple)', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold', fontSize: '0.85rem' }}>
-                    {userProfile.name.charAt(0)}
-                  </div>
-                )}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff', lineHeight: '1.2' }}>{userProfile.name}</span>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{userProfile.email}</span>
-                </div>
-              </div>
-              <button 
-                onClick={handleLogout}
-                style={{ background: 'rgba(255, 107, 107, 0.1)', border: '1px solid rgba(255, 107, 107, 0.2)', color: '#ff6b6b', padding: '0.35rem 0.75rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}
-                onMouseEnter={(e) => { e.target.style.background = 'rgba(255, 107, 107, 0.2)'; }}
-                onMouseLeave={(e) => { e.target.style.background = 'rgba(255, 107, 107, 0.1)'; }}
-              >
-                Sign Out
-              </button>
-            </div>
-          )}
         </nav>
+
+        {userProfile && (
+          <div className="user-profile-header">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              {userProfile.picture ? (
+                <img 
+                  src={userProfile.picture} 
+                  alt={userProfile.name} 
+                  style={{ width: '32px', height: '32px', borderRadius: '50%', border: '1.5px solid var(--accent-cyan)' }}
+                />
+              ) : (
+                <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--accent-violet)', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold', fontSize: '0.85rem' }}>
+                  {userProfile.name.charAt(0)}
+                </div>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff', lineHeight: '1.2' }}>{userProfile.name}</span>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{userProfile.email}</span>
+              </div>
+            </div>
+            <button 
+              onClick={handleLogout}
+              style={{ background: 'rgba(255, 107, 107, 0.1)', border: '1px solid rgba(255, 107, 107, 0.2)', color: '#ff6b6b', padding: '0.35rem 0.75rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}
+              onMouseEnter={(e) => { e.target.style.background = 'rgba(255, 107, 107, 0.2)'; }}
+              onMouseLeave={(e) => { e.target.style.background = 'rgba(255, 107, 107, 0.1)'; }}
+            >
+              Sign Out
+            </button>
+          </div>
+        )}
       </header>
 
       {/* Global Stat Indicators */}
