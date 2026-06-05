@@ -1,7 +1,47 @@
 const ExcelJS = require('exceljs');
 const fs = require('fs');
 const path = require('path');
+const https = require('https');
 const { dbQuery } = require('../config/database');
+
+/**
+ * Helper to download/retrieve image buffer from local disk or remote URL (Cloudinary)
+ */
+async function getImageBuffer(imageField) {
+  if (!imageField) return null;
+
+  if (imageField.startsWith('http://') || imageField.startsWith('https://')) {
+    return new Promise((resolve) => {
+      https.get(imageField, (res) => {
+        if (res.statusCode !== 200) {
+          resolve(null);
+          return;
+        }
+        const data = [];
+        res.on('data', (chunk) => data.push(chunk));
+        res.on('end', () => {
+          resolve(Buffer.concat(data));
+        });
+      }).on('error', (err) => {
+        console.error(`Failed to download image from URL ${imageField}:`, err.message);
+        resolve(null);
+      });
+    });
+  } else {
+    // Local storage fallback
+    const imageFilename = imageField.replace('/uploads/images/', '');
+    const imagePath = path.resolve(__dirname, '../public/uploads/images/', imageFilename);
+    if (fs.existsSync(imagePath)) {
+      try {
+        return fs.readFileSync(imagePath);
+      } catch (err) {
+        console.error(`Failed to read local file ${imagePath}:`, err.message);
+        return null;
+      }
+    }
+  }
+  return null;
+}
 
 /**
  * Excel Generation Engine (Module 5)
@@ -178,7 +218,7 @@ async function generateExcelWorkbook(uploadId = null) {
     cell.alignment = { vertical: 'middle', horizontal: 'center' };
   });
 
-  questions.forEach(q => {
+  for (const q of questions) {
     const isImgPresent = q.Image_Present === 1 || q.Image_Present === true;
     const addedRow = qSheet.addRow({
       Question_ID: q.Question_ID.substring(0, 8),
@@ -208,13 +248,18 @@ async function generateExcelWorkbook(uploadId = null) {
       
       if (q.Embedded_Image) {
         try {
-          const imageFilename = q.Embedded_Image.replace('/uploads/images/', '');
-          const imagePath = path.resolve(__dirname, '../public/uploads/images/', imageFilename);
-          
-          if (fs.existsSync(imagePath)) {
+          const imageBuffer = await getImageBuffer(q.Embedded_Image);
+          if (imageBuffer) {
+            let ext = 'png';
+            if (q.Embedded_Image.toLowerCase().includes('.jpg') || q.Embedded_Image.toLowerCase().includes('.jpeg')) {
+              ext = 'jpeg';
+            } else if (q.Embedded_Image.toLowerCase().includes('.gif')) {
+              ext = 'gif';
+            }
+            
             const excelImageId = workbook.addImage({
-              filename: imagePath,
-              extension: imageFilename.toLowerCase().endsWith('.png') ? 'png' : 'jpeg'
+              buffer: imageBuffer,
+              extension: ext
             });
             
             qSheet.addImage(excelImageId, {
@@ -230,7 +275,7 @@ async function generateExcelWorkbook(uploadId = null) {
     } else {
       addedRow.height = 24;
     }
-  });
+  }
 
   qSheet.eachRow({ includeEmpty: false }, (row, rowNum) => {
     if (rowNum === 1) return;
