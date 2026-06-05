@@ -79,6 +79,7 @@ function App() {
   const [authChecking, setAuthChecking] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   const toggleSidebar = () => {
     if (window.innerWidth <= 992) {
@@ -781,10 +782,54 @@ function App() {
     }
   };
 
-  const triggerExcelDownload = (uploadId = '') => {
+  const triggerExcelDownload = async (uploadId = '') => {
+    setIsExporting(true);
     let url = '/api/downloadExcel';
     if (uploadId) url += `?uploadId=${uploadId}`;
-    window.location.href = url;
+    
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error('Export failed');
+      }
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.setAttribute('download', uploadId ? `neet_pg_questions_${uploadId}.xlsx` : 'neet_pg_questions_combined.xlsx');
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to export Excel. Please try again.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const triggerTrendsExcelDownload = async () => {
+    setIsExporting(true);
+    const url = '/api/trends/downloadExcel';
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error('Export failed');
+      }
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.setAttribute('download', 'neet_pg_yoy_subject_trends.xlsx');
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to export trends. Please try again.');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const renderOptionText = (optText) => {
@@ -3256,7 +3301,7 @@ function App() {
                     background: 'linear-gradient(135deg, var(--accent-violet), #4f46e5)',
                     boxShadow: '0 4px 15px rgba(139, 92, 246, 0.3)'
                   }}
-                  onClick={() => window.open('/api/trends/downloadExcel', '_blank')}
+                  onClick={() => triggerTrendsExcelDownload()}
                   disabled={!trendsMatrix || !trendsMatrix.years || trendsMatrix.years.length === 0}
                 >
                   📥 Export Trends to Excel
@@ -3814,6 +3859,39 @@ function App() {
 
             </div>
           </div>
+        </div>
+      {isExporting && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.8)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 99999,
+          color: '#ffffff'
+        }}>
+          <div className="spinner-border text-cyan" role="status" style={{
+            width: '3.5rem',
+            height: '3.5rem',
+            border: '0.3em solid rgba(6, 182, 212, 0.15)',
+            borderTop: '0.3em solid var(--accent-cyan)',
+            borderRadius: '50%',
+            animation: 'spinner-border .75s linear infinite',
+            marginBottom: '1.5rem'
+          }}></div>
+          <style>{`
+            @keyframes spinner-border {
+              to { transform: rotate(360deg); }
+            }
+          `}</style>
+          <h3 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '0.5rem', letterSpacing: '-0.025em' }}>Compiling & Exporting Excel...</h3>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Please wait. We are downloading and embedding high-resolution images.</p>
         </div>
       )}
     </div>
