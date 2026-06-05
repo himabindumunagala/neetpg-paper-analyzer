@@ -3859,7 +3859,8 @@ function App() {
 
             </div>
           </div>
-        </div>
+      )}
+
       {isExporting && (
         <div style={{
           position: 'fixed',
