@@ -3859,6 +3859,7 @@ function App() {
 
             </div>
           </div>
+        </div>
       )}
 
       {isExporting && (
