@@ -272,6 +272,206 @@ app.post('/api/enrichPending', async (req, res) => {
 });
 
 /**
+ * 2c. POST /api/questions/bulk-update-images
+ * Accepts a JSON array of corrections to batch update image associations in both SQL and MongoDB
+ */
+app.post('/api/questions/bulk-update-images', async (req, res) => {
+  try {
+    const corrections = req.body;
+    if (!Array.isArray(corrections)) {
+      return res.status(400).json({ error: 'Request body must be a JSON array of corrections.' });
+    }
+
+    const isMongo = !!models.QuestionBank;
+    let updatedCount = 0;
+
+    for (const item of corrections) {
+      const { Question_ID, Image_Present, Embedded_Image, Image_Description } = item;
+      if (!Question_ID) continue;
+
+      const imgPresentBool = !!Image_Present;
+      const imgPathVal = imgPresentBool ? (Embedded_Image || null) : null;
+      const imgDescVal = imgPresentBool ? (Image_Description || null) : null;
+
+      if (isMongo) {
+        // MONGODB UPDATE
+        await models.QuestionBank.updateOne(
+          { Question_ID },
+          {
+            $set: {
+              Image_Present: imgPresentBool,
+              Embedded_Image: imgPathVal,
+              Image_Description: imgDescVal
+            }
+          }
+        );
+
+        if (imgPresentBool && imgPathVal) {
+          await models.Images.updateOne(
+            { Question_ID },
+            {
+              $set: {
+                Image_Path: imgPathVal,
+                Image_Description: imgDescVal || '',
+                Image_Type: 'Clinical Diagram'
+              }
+            },
+            { upsert: true }
+          );
+        } else {
+          await models.Images.deleteOne({ Question_ID });
+        }
+      } else {
+        // SQLITE UPDATE
+        const dbValImagePresent = imgPresentBool ? 1 : 0;
+        await dbQuery.run(
+          'UPDATE QuestionBank SET Image_Present = ?, Embedded_Image = ?, Image_Description = ? WHERE Question_ID = ?',
+          [dbValImagePresent, imgPathVal, imgDescVal, Question_ID]
+        );
+
+        if (imgPresentBool && imgPathVal) {
+          const existing = await dbQuery.get('SELECT Image_ID FROM Images WHERE Question_ID = ?', [Question_ID]);
+          if (existing) {
+            await dbQuery.run(
+              'UPDATE Images SET Image_Path = ?, Image_Description = ? WHERE Question_ID = ?',
+              [imgPathVal, imgDescVal || '', Question_ID]
+            );
+          } else {
+            await dbQuery.run(
+              'INSERT INTO Images (Image_ID, Question_ID, Image_Path, Image_Description, Image_Type) VALUES (?, ?, ?, ?, ?)',
+              [uuidv4(), Question_ID, imgPathVal, imgDescVal || '', 'Clinical Diagram']
+            );
+          }
+        } else {
+          await dbQuery.run('DELETE FROM Images WHERE Question_ID = ?', [Question_ID]);
+        }
+      }
+      updatedCount++;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Successfully updated image data for ${updatedCount} questions.`
+    });
+
+  } catch (error) {
+    console.error('Bulk image update error:', error);
+    res.status(500).json({ error: 'Failed to perform bulk image corrections.' });
+  }
+});
+
+/**
+ * 2d. POST /api/questions/sync-year-images
+ * Syncs image associations for a specific year.
+ * Sets images for specified question numbers, and clears images for all other questions of that year.
+ */
+app.post('/api/questions/sync-year-images', async (req, res) => {
+  try {
+    const { year, questionsWithImages } = req.body;
+    if (!year || !Array.isArray(questionsWithImages)) {
+      return res.status(400).json({ error: 'Request body must contain "year" (integer) and "questionsWithImages" (array).' });
+    }
+
+    const yearInt = parseInt(year, 10);
+    const isMongo = !!models.QuestionBank;
+
+    // Fetch all questions for this year from the database
+    let yearQuestions = [];
+    if (isMongo) {
+      yearQuestions = await models.QuestionBank.find({ Previous_Year: yearInt }).lean();
+    } else {
+      yearQuestions = await dbQuery.all('SELECT Question_ID, Question_Number FROM QuestionBank WHERE Previous_Year = ?', [yearInt]);
+    }
+
+    if (!yearQuestions || yearQuestions.length === 0) {
+      return res.status(404).json({ error: `No questions found for the year ${yearInt}.` });
+    }
+
+    // Map the new input list by Question_Number
+    const inputMap = new Map();
+    questionsWithImages.forEach(q => {
+      if (q.Question_Number !== undefined) {
+        inputMap.set(parseInt(q.Question_Number, 10), q);
+      }
+    });
+
+    let updatedCount = 0;
+    let clearedCount = 0;
+
+    for (const q of yearQuestions) {
+      const qNum = parseInt(q.Question_Number, 10);
+      const qId = q.Question_ID;
+      const targetMatch = inputMap.get(qNum);
+
+      if (targetMatch) {
+        // This question has an image: Set/Update it
+        const imgPath = targetMatch.Embedded_Image || null;
+        const imgDesc = targetMatch.Image_Description || null;
+
+        if (isMongo) {
+          await models.QuestionBank.updateOne(
+            { Question_ID: qId },
+            { $set: { Image_Present: true, Embedded_Image: imgPath, Image_Description: imgDesc } }
+          );
+          if (imgPath) {
+            await models.Images.updateOne(
+              { Question_ID: qId },
+              { $set: { Image_Path: imgPath, Image_Description: imgDesc || '', Image_Type: 'Clinical Diagram' } },
+              { upsert: true }
+            );
+          }
+        } else {
+          await dbQuery.run(
+            'UPDATE QuestionBank SET Image_Present = 1, Embedded_Image = ?, Image_Description = ? WHERE Question_ID = ?',
+            [imgPath, imgDesc, qId]
+          );
+          if (imgPath) {
+            const existing = await dbQuery.get('SELECT Image_ID FROM Images WHERE Question_ID = ?', [qId]);
+            if (existing) {
+              await dbQuery.run(
+                'UPDATE Images SET Image_Path = ?, Image_Description = ? WHERE Question_ID = ?',
+                [imgPath, imgDesc || '', qId]
+              );
+            } else {
+              await dbQuery.run(
+                'INSERT INTO Images (Image_ID, Question_ID, Image_Path, Image_Description, Image_Type) VALUES (?, ?, ?, ?, ?)',
+                [uuidv4(), qId, imgPath, imgDesc || '', 'Clinical Diagram']
+              );
+            }
+          }
+        }
+        updatedCount++;
+      } else {
+        // This question does not have an image: Clear it
+        if (isMongo) {
+          await models.QuestionBank.updateOne(
+            { Question_ID: qId },
+            { $set: { Image_Present: false, Embedded_Image: null, Image_Description: null } }
+          );
+          await models.Images.deleteOne({ Question_ID: qId });
+        } else {
+          await dbQuery.run(
+            'UPDATE QuestionBank SET Image_Present = 0, Embedded_Image = NULL, Image_Description = NULL WHERE Question_ID = ?',
+            [qId]
+          );
+          await dbQuery.run('DELETE FROM Images WHERE Question_ID = ?', [qId]);
+        }
+        clearedCount++;
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Sync complete for year ${yearInt}. Assigned images to ${updatedCount} questions. Cleared images from ${clearedCount} questions.`
+    });
+
+  } catch (error) {
+    console.error('Year images sync error:', error);
+    res.status(500).json({ error: 'Failed to sync images for the year.' });
+  }
+});
+
+/**
  * 3. GET /api/processingStatus
  * Monitors ongoing parsing status of active queues
  */
